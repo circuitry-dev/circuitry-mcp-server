@@ -1,43 +1,48 @@
 # @circuitry/mcp-server
 
-MCP (Model Context Protocol) server that enables Claude Code CLI to communicate with [Circuitry](https://www.circuitry.dev) - a visual workflow and diagramming platform.
+MCP (Model Context Protocol) server that gives AI coding agents access to [Circuitry](https://www.circuitry.dev) - a visual workflow and diagramming platform.
 
 ## What It Does
 
-- **Visualize Code**: Create code nodes from your project files with bidirectional sync
-- **Understand Diagrams**: Claude CLI can comprehend user-drawn flowcharts and diagrams
-- **Create Flowcharts**: Ask Claude to create visual flowcharts via Circuitry's chat agent
-- **Data Visualization**: Generate spreadsheets and charts from code analysis
+- **Visualize Code**: Create code nodes from project files with bidirectional sync
+- **Understand Diagrams**: AI agents can comprehend user-drawn flowcharts and diagrams
+- **Create Flowcharts**: Generate visual flowcharts via Circuitry's chat agent
+- **Data Visualization**: Create spreadsheets and charts from code analysis
 
 ## Prerequisites
 
 1. **Circuitry Server** - Download from [circuitry.dev/download](https://www.circuitry.dev/download)
 2. **Node.js 18+**
-3. **Claude Code CLI**
+3. **An MCP-compatible AI client** (Claude Code, Cursor, VS Code, Gemini CLI, etc.)
 
-## Quick Start
+## Setup
 
-### 1. Run Setup
+### 1. Install Circuitry Server
+
+1. Download from [circuitry.dev/download](https://www.circuitry.dev/download)
+2. Launch the app (appears in system tray)
+3. Go to **Server → Preferences → Generate New Access Key**
+4. Copy the key for the next step
+
+### 2. Configure MCP Server
 
 ```bash
 npx @circuitry/mcp-server setup
 ```
 
-This will prompt you for:
-- **EServer address** - defaults to `http://localhost:3030` (press Enter to accept)
-- **Access key** - generated in Circuitry Server
+This prompts for:
+- **EServer address** - defaults to `http://localhost:3030`
+- **Access key** - the key you generated above
 
-### 2. Generate Access Key
+### 3. Add to Your AI Client
 
-1. Download and launch **Circuitry Server** from [circuitry.dev/download](https://www.circuitry.dev/download)
-2. Click the **Circuitry icon** in your system tray
-3. Go to **Server → Preferences**
-4. Click **"Generate New Access Key"**
-5. Copy the key and paste it when prompted by setup
+#### Claude Code
 
-### 3. Configure Claude Code
+```bash
+claude mcp add circuitry npx @circuitry/mcp-server
+```
 
-Add to your Claude Code config (`~/.claude/config.json`):
+Or manually add to `~/.claude/config.json`:
 
 ```json
 {
@@ -50,9 +55,40 @@ Add to your Claude Code config (`~/.claude/config.json`):
 }
 ```
 
-### 4. Restart Claude Code
+#### Cursor
 
-Restart Claude Code to load the MCP server.
+Settings → MCP → Add New MCP Server:
+
+```json
+{
+  "mcpServers": {
+    "circuitry": {
+      "command": "npx",
+      "args": ["-y", "@circuitry/mcp-server"]
+    }
+  }
+}
+```
+
+#### VS Code / Copilot
+
+```bash
+code --add-mcp '{"name":"circuitry","command":"npx","args":["-y","@circuitry/mcp-server"]}'
+```
+
+#### Gemini CLI
+
+```bash
+gemini mcp add circuitry npx @circuitry/mcp-server
+```
+
+#### Cline / Windsurf
+
+Add to your MCP configuration using the standard format above.
+
+### 4. Restart Your Client
+
+Restart your AI client to load the MCP server.
 
 ## Usage Examples
 
@@ -61,14 +97,14 @@ Restart Claude Code to load the MCP server.
 ```
 You: Show me the auth files as code nodes in Circuitry
 
-Claude: I'll create code nodes from your auth files...
-Done! Created 4 code nodes for:
+Agent: I'll create code nodes from your auth files...
+Done! Created 4 code nodes:
 - auth/login.ts
 - auth/logout.ts
 - auth/middleware.ts
 - auth/types.ts
 
-The nodes are synced - edits in Circuitry will update your source files.
+The nodes are synced - edits in Circuitry update your source files.
 ```
 
 ### Understand User-Drawn Flows
@@ -76,7 +112,7 @@ The nodes are synced - edits in Circuitry will update your source files.
 ```
 You: I've drawn a flow of how I think the auth should work
 
-Claude: I'll analyze your flow in Circuitry...
+Agent: I'll analyze your flow in Circuitry...
 
 I can see you've drawn a 5-node authentication flow:
 1. Start → Login Form
@@ -90,7 +126,7 @@ I can see you've drawn a 5-node authentication flow:
 ```
 You: Create a flowchart showing the error handling flow
 
-Claude: I'll ask Circuitry's agent to create this flowchart...
+Agent: I'll ask Circuitry's agent to create this flowchart...
 
 Done! Created a flowchart with 7 nodes showing:
 - Error detection
@@ -158,7 +194,7 @@ Location: `~/.circuitry/mcp-config.json`
 }
 ```
 
-### Environment Variables (Override)
+### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -185,7 +221,7 @@ npx @circuitry/mcp-server status
 
 ### "Invalid access key"
 
-1. **Create new key**: Go to Circuitry Server → Preferences → Generate New Access Key
+1. **Create new key**: Circuitry Server → Preferences → Generate New Access Key
 2. **Re-run setup**: `npx @circuitry/mcp-server setup`
 
 ### "No Circuitry browser client connected"
@@ -194,8 +230,6 @@ npx @circuitry/mcp-server status
 2. **Refresh**: Try refreshing the Circuitry page
 
 ## Development
-
-### Local Development
 
 ```bash
 # Clone and install
@@ -211,9 +245,7 @@ npx tsx src/index.ts setup
 npx tsx src/index.ts status
 ```
 
-### Testing with Claude Code
-
-For Claude Code to use your local changes, update config:
+To test local changes, point your MCP config to the built output:
 
 ```json
 {
@@ -225,8 +257,6 @@ For Claude Code to use your local changes, update config:
   }
 }
 ```
-
-Restart Claude Code after each rebuild.
 
 ## License
 
