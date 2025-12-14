@@ -1,0 +1,42 @@
+{
+  "name": "@circuitry/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Claude Code CLI to communicate with Circuitry",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "circuitry-mcp": "./bin/circuitry-mcp"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "setup": "node dist/index.js setup"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "circuitry",
+    "workflow",
+    "ai"
+  ],
+  "author": "Circuitry",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.16.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ]
+}
