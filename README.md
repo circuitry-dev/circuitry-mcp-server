@@ -104,7 +104,7 @@ Done! Created 4 code nodes:
 - auth/middleware.ts
 - auth/types.ts
 
-The nodes are synced - edits in Circuitry update your source files.
+Changes sync bidirectionally with your source files.
 ```
 
 ### Understand User-Drawn Flows
