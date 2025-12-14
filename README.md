@@ -17,22 +17,25 @@ MCP (Model Context Protocol) server that gives AI coding agents access to [Circu
 
 ## Setup
 
-### 1. Install Circuitry Server
+### 1. Install & Configure Circuitry Server
 
-1. Download from [circuitry.dev/download](https://www.circuitry.dev/download)
-2. Launch the app (appears in system tray)
-3. Go to **Server → Preferences → Generate New Access Key**
-4. Copy the key for the next step
+1. Download **Circuitry Server** from [circuitry.dev/download](https://www.circuitry.dev/download)
+2. Launch the app (appears in your system tray)
+3. Click the tray icon → **Server → Preferences**
+4. Click **"Generate New Access Key"**
+5. Copy the key — you'll need it in the next step
 
-### 2. Configure MCP Server
+### 2. Run MCP Setup (Required)
 
 ```bash
 npx @circuitry/mcp-server setup
 ```
 
-This prompts for:
-- **EServer address** - defaults to `http://localhost:3030`
-- **Access key** - the key you generated above
+This will prompt you to enter:
+- **EServer address** — press Enter for default (`http://localhost:3030`)
+- **Access key** — paste the key you generated above
+
+This stores your credentials in `~/.circuitry/mcp-config.json`.
 
 ### 3. Add to Your AI Client
 
