@@ -232,6 +232,11 @@ export async function startServer(): Promise<void> {
         return successResponse(result)
       }
 
+      if (name === 'workflow.getFlowcharts') {
+        const result = await client.callApi('mcp.getFlowcharts', {})
+        return successResponse(result)
+      }
+
       // Handle code tools - can use file path OR direct content
       if (name === 'code.create') {
         const { filePath, name: nodeName, content, position } = args as {
@@ -282,13 +287,13 @@ export async function startServer(): Promise<void> {
   // Keep the process running
   process.on('SIGINT', () => {
     log('Shutting down...')
-    client.disconnect()
+    client.disconnectWebSocket()
     process.exit(0)
   })
 
   process.on('SIGTERM', () => {
     log('Shutting down...')
-    client.disconnect()
+    client.disconnectWebSocket()
     process.exit(0)
   })
 }

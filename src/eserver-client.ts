@@ -432,6 +432,7 @@ export class EServerClient {
   /**
    * Call API via HTTP POST
    * Includes mcpSessionId for routing to the bound client.
+   * Auto-clears session on 401 so reconnection works properly.
    * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
    */
   private async callApiViaHttp(method: string, args: Record<string, unknown>): Promise<unknown> {
@@ -443,6 +444,14 @@ export class EServerClient {
 
     if (!response.ok) {
       const error = await response.text()
+
+      // On 401 (session expired/invalid), clear local session so reconnect works
+      if (response.status === 401) {
+        log('Session expired or invalid, clearing local session')
+        this.mcpSessionId = null
+        throw new Error(`Session expired. Please call circuitry.connect to re-establish connection.`)
+      }
+
       throw new Error(`API call failed: ${response.status} - ${error}`)
     }
 
@@ -642,9 +651,9 @@ export class EServerClient {
   }
 
   /**
-   * Disconnect WebSocket
+   * Disconnect WebSocket connection (used internally for cleanup)
    */
-  disconnect(): void {
+  disconnectWebSocket(): void {
     this.maxReconnectAttempts = 0 // Prevent reconnection
     this.ws?.close()
     this.ws = null

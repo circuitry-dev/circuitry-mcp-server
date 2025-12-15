@@ -75,6 +75,16 @@ const workflowTools: ToolDefinition[] = [
       { name: 'nodeIds', type: 'array', description: 'Array of node IDs to get details for (optional - defaults to all)', required: false }
     ],
     returns: { type: 'Array<{ id, name, type, inputs, outputs }>', description: 'Simplified node details' }
+  },
+  {
+    name: 'workflow.getFlowcharts',
+    namespace: 'workflow',
+    description: 'Get existing flow nodes to modify. Use before updateFlowchart to see what exists.',
+    parameters: [],
+    returns: {
+      type: 'Array<{ id, name, shape, color, connections: { to, label }[] }>',
+      description: 'All flow nodes with their IDs, properties, and outgoing connections'
+    }
   }
 ]
 
@@ -117,6 +127,120 @@ const nodeTools: ToolDefinition[] = [
       { name: 'nodeId', type: 'string', description: 'ID of the node to delete', required: true }
     ],
     returns: { type: 'boolean', description: 'True if deletion succeeded' }
+  },
+  {
+    name: 'nodes.createFlowchart',
+    namespace: 'nodes',
+    description: `Create a flowchart with nodes and edges on the canvas. Returns nodeIds mapping for subsequent modifications via nodes.updateFlowchart.
+
+**Nodes:** { id, name, shape?, color? }
+- shape: rounded (default), diamond (decisions), pill (start/end), cylinder (database), parallelogram (I/O)
+- color: CSS name (blue, green, red, amber) or hex. Use red for problems, green for success.
+
+**Edges:** { from, to, fromHandle?, toHandle?, label? }
+- handles: "left", "right", "top", "bottom"
+- For decisions: fromHandle "right" for Yes/true, "bottom" for No/false`,
+    parameters: [
+      {
+        name: 'nodes',
+        type: 'array',
+        description: 'Array of nodes: [{id, name, shape?, color?}]',
+        required: true
+      },
+      {
+        name: 'edges',
+        type: 'array',
+        description: 'Array of edges: [{from, to, fromHandle?, toHandle?, label?}]',
+        required: true
+      },
+      {
+        name: 'startPosition',
+        type: 'object',
+        description: 'Starting position {x, y} for the flowchart',
+        required: false
+      },
+      {
+        name: 'spacing',
+        type: 'number',
+        description: 'Gap between nodes in pixels (default: 60)',
+        required: false
+      }
+    ],
+    returns: {
+      type: '{ nodeIds: Record<string, string>, edgeIds: string[], nodeCount: number, edgeCount: number }',
+      description: 'Map of logical IDs to actual node IDs, edge IDs, and counts'
+    }
+  },
+  {
+    name: 'nodes.updateFlowchart',
+    namespace: 'nodes',
+    description: 'Update an existing flowchart. Pass nodeIds from createFlowchart response to modify nodes/edges.',
+    parameters: [
+      {
+        name: 'nodeIds',
+        type: 'object',
+        description: 'Map of logical IDs to actual node IDs (from createFlowchart response)',
+        required: true
+      },
+      {
+        name: 'add',
+        type: 'object',
+        description: '{ nodes: [{id, name, shape?, color?}], edges: [{from, to, label?}] } - new nodes/edges to add',
+        required: false
+      },
+      {
+        name: 'update',
+        type: 'object',
+        description: '{ "actualNodeId": { displayName?, color?, shape? } } - update existing nodes by actual ID',
+        required: false
+      },
+      {
+        name: 'remove',
+        type: 'object',
+        description: '{ nodeIds?: string[], edgeIds?: string[] } - actual IDs to remove',
+        required: false
+      }
+    ],
+    returns: {
+      type: '{ added: { nodeIds, edgeIds }, updated: string[], removed: { nodeIds, edgeIds } }',
+      description: 'Summary of changes made'
+    }
+  },
+  {
+    name: 'nodes.insertBetween',
+    namespace: 'nodes',
+    description: 'Insert a new node between two connected nodes. Removes existing edge and creates two new edges (source→newNode→target).',
+    parameters: [
+      { name: 'sourceId', type: 'string', description: 'Source node ID (start of existing edge)', required: true },
+      { name: 'targetId', type: 'string', description: 'Target node ID (end of existing edge)', required: true },
+      {
+        name: 'node',
+        type: 'object',
+        description: '{ name, shape?, color? } - new node to insert. Shape: rounded, diamond, pill, cylinder, parallelogram',
+        required: true
+      }
+    ],
+    returns: {
+      type: '{ nodeId, removedEdgeId, newEdgeIds }',
+      description: 'IDs of created node, removed edge, and two new edges [sourceToNew, newToTarget]'
+    }
+  }
+]
+
+// ============================================================================
+// Edge Tools (for modifying connections between nodes)
+// ============================================================================
+
+const edgeTools: ToolDefinition[] = [
+  {
+    name: 'edges.deleteBetween',
+    namespace: 'edges',
+    description: 'Delete all edges between two nodes. More intuitive than needing edge IDs.',
+    parameters: [
+      { name: 'sourceId', type: 'string', description: 'Source node ID', required: true },
+      { name: 'targetId', type: 'string', description: 'Target node ID', required: true }
+    ],
+    returns: { type: 'number', description: 'Count of edges deleted' }
   }
 ]
 
@@ -196,20 +320,20 @@ const agentTools: ToolDefinition[] = [
     ],
     returns: { type: '{ chatId, status }', description: 'Chat ID for polling and initial status' }
   },
-  {
-    name: 'agent.createFlowchart',
-    namespace: 'agent',
-    description: 'Ask agent to create a flowchart. Agent is fine-tuned for this. Returns chatId for polling.',
-    parameters: [
-      { name: 'description', type: 'string', description: 'Description of the flowchart to create', required: true },
-      { name: 'style', type: 'string', description: 'Style preference', required: false, enum: ['simple', 'detailed', 'technical'] }
-    ],
-    returns: { type: '{ chatId, status }', description: 'Chat ID for polling' }
-  },
+  // {
+  //   name: 'agent.createFlowchart',
+  //   namespace: 'agent',
+  //   description: 'Ask agent to create flowchart from natural language. Use nodes.createFlowchart for direct control.',
+  //   parameters: [
+  //     { name: 'description', type: 'string', description: 'Natural language description of the flowchart to create', required: true },
+  //     { name: 'style', type: 'string', description: 'Style preference', required: false, enum: ['simple', 'detailed', 'technical'] }
+  //   ],
+  //   returns: { type: '{ chatId, status }', description: 'Chat ID for polling' }
+  // },
   {
     name: 'agent.poll',
     namespace: 'agent',
-    description: 'Poll for agent response. Call this after agent.chat or agent.createFlowchart.',
+    description: 'Poll for agent response. Call this after agent.chat.',
     parameters: [
       { name: 'chatId', type: 'string', description: 'Chat ID from agent.chat', required: true }
     ],
@@ -228,6 +352,7 @@ export const allToolDefinitions: ToolDefinition[] = [
   ...connectionTools,
   ...workflowTools,
   ...nodeTools,
+  ...edgeTools,
   ...codeTools,
   ...sheetTools,
   ...agentTools
