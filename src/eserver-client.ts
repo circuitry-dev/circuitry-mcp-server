@@ -21,6 +21,8 @@ const log = (...args: unknown[]) => console.error('[eserver-client]', ...args)
 export interface ConnectionResult {
   approved: boolean
   message?: string
+  mcpSessionId?: string
+  clientId?: string
 }
 
 export interface AgentChatResult {
@@ -44,6 +46,7 @@ export interface FileReadResult {
 export class EServerClient {
   private baseUrl: string
   private accessKey: string
+  private mcpSessionId: string | null = null
   private ws: WebSocket | null = null
   private wsConnected = false
   private pendingRequests = new Map<string, {
@@ -113,8 +116,10 @@ export class EServerClient {
   // ============================================================================
 
   /**
-   * Request connection permission from Circuitry user
-   * Shows a dialog in Circuitry for user to approve/deny
+   * Request connection permission from Circuitry user.
+   * Shows a dialog in ALL connected Circuitry clients for user to approve/deny.
+   * First client to approve wins and binds this MCP session to that client.
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
    */
   async requestConnection(): Promise<ConnectionResult> {
     try {
@@ -129,9 +134,16 @@ export class EServerClient {
 
       if (response.ok) {
         const data = await response.json()
+        // Store mcpSessionId for subsequent requests
+        if (data.approved && data.mcpSessionId) {
+          this.mcpSessionId = data.mcpSessionId
+          log('MCP session established:', this.mcpSessionId)
+        }
         return {
           approved: data.approved,
-          message: data.message
+          message: data.message,
+          mcpSessionId: data.mcpSessionId,
+          clientId: data.clientId
         }
       } else {
         const error = await response.text()
@@ -145,6 +157,54 @@ export class EServerClient {
       return {
         approved: false,
         message: error instanceof Error ? error.message : 'Connection failed'
+      }
+    }
+  }
+
+  /**
+   * Disconnect the current MCP session.
+   * Clears the session on both client and server side.
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
+   */
+  async disconnect(): Promise<{ success: boolean; message?: string }> {
+    if (!this.mcpSessionId) {
+      return {
+        success: true,
+        message: 'No active session to disconnect'
+      }
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/mcp/disconnect`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          mcpSessionId: this.mcpSessionId
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        this.mcpSessionId = null
+        log('MCP session disconnected')
+        return {
+          success: true,
+          message: data.message
+        }
+      } else {
+        const error = await response.text()
+        return {
+          success: false,
+          message: `Disconnect failed: ${error}`
+        }
+      }
+    } catch (error) {
+      log('Disconnect failed:', error)
+      // Clear local session anyway
+      this.mcpSessionId = null
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Disconnect failed'
       }
     }
   }
@@ -174,7 +234,9 @@ export class EServerClient {
 
   /**
    * Send a message to Circuitry's chat agent
-   * Opens chat panel in agent+mcp mode
+   * Opens chat panel in agent+mcp mode.
+   * Includes mcpSessionId for routing to the bound client.
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
    */
   async sendAgentChat(message: string, context?: Record<string, unknown>): Promise<AgentChatResult> {
     try {
@@ -184,7 +246,8 @@ export class EServerClient {
         body: JSON.stringify({
           message,
           context,
-          mode: 'agent+mcp'
+          mode: 'agent+mcp',
+          mcpSessionId: this.mcpSessionId
         })
       })
 
@@ -242,7 +305,9 @@ export class EServerClient {
 
   /**
    * Create a code node from a file path
-   * EServer reads the file and creates the node with sync metadata
+   * EServer reads the file and creates the node with sync metadata.
+   * Includes mcpSessionId for routing to the bound client.
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
    */
   async createCodeNodeFromFile(
     filePath: string,
@@ -256,7 +321,8 @@ export class EServerClient {
         body: JSON.stringify({
           filePath,
           name,
-          position
+          position,
+          mcpSessionId: this.mcpSessionId
         })
       })
 
@@ -274,7 +340,9 @@ export class EServerClient {
   }
 
   /**
-   * Create multiple code nodes from file paths
+   * Create multiple code nodes from file paths.
+   * Includes mcpSessionId for routing to the bound client.
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
    */
   async createCodeNodesFromFiles(
     filePaths: string[],
@@ -286,7 +354,8 @@ export class EServerClient {
         headers: this.getHeaders(),
         body: JSON.stringify({
           filePaths,
-          layout: layout || 'grid'
+          layout: layout || 'grid',
+          mcpSessionId: this.mcpSessionId
         })
       })
 
@@ -362,12 +431,14 @@ export class EServerClient {
 
   /**
    * Call API via HTTP POST
+   * Includes mcpSessionId for routing to the bound client.
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
    */
   private async callApiViaHttp(method: string, args: Record<string, unknown>): Promise<unknown> {
     const response = await fetch(`${this.baseUrl}/circuitry/api`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ method, args })
+      body: JSON.stringify({ method, args, mcpSessionId: this.mcpSessionId })
     })
 
     if (!response.ok) {
@@ -585,6 +656,21 @@ export class EServerClient {
    */
   isConnected(): boolean {
     return this.wsConnected
+  }
+
+  /**
+   * Get the MCP session ID (assigned after successful connection approval)
+   * @see docs/circuitry-mcp-server.md#multi-client-connection-behavior
+   */
+  getMcpSessionId(): string | null {
+    return this.mcpSessionId
+  }
+
+  /**
+   * Check if MCP session is established
+   */
+  hasSession(): boolean {
+    return this.mcpSessionId !== null
   }
 }
 

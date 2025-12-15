@@ -26,6 +26,13 @@ const connectionTools: ToolDefinition[] = [
     description: 'Request connection to Circuitry. Shows permission dialog in Circuitry for user approval. Call this first before using other tools.',
     parameters: [],
     returns: { type: '{ approved, message }', description: 'Whether connection was approved' }
+  },
+  {
+    name: 'circuitry.disconnect',
+    namespace: 'circuitry',
+    description: 'Disconnect from Circuitry. Ends the current MCP session. Call circuitry.connect to reconnect.',
+    parameters: [],
+    returns: { type: '{ disconnected, message }', description: 'Whether disconnection was successful' }
   }
 ]
 

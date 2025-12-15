@@ -157,6 +157,16 @@ export async function startServer(): Promise<void> {
         })
       }
 
+      // Handle circuitry.disconnect - end session
+      if (name === 'circuitry.disconnect') {
+        const result = await client.disconnect()
+        connectionApproved = false
+        return successResponse({
+          disconnected: result.success,
+          message: result.message || 'Session disconnected. Call circuitry.connect to reconnect.'
+        })
+      }
+
       // All other tools require approved connection
       if (!connectionApproved) {
         // Try to auto-approve if already approved in a previous session
