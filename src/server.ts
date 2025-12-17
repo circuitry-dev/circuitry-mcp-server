@@ -237,6 +237,36 @@ export async function startServer(): Promise<void> {
         return successResponse(result)
       }
 
+      if (name === 'workflow.layoutNodes') {
+        const { nodeIds, direction, spacing } = args as {
+          nodeIds?: string[]
+          direction?: 'vertical' | 'horizontal'
+          spacing?: number
+        }
+        const result = await client.callApi('mcp.layoutNodes', { nodeIds, direction, spacing })
+        return successResponse(result)
+      }
+
+      if (name === 'workflow.undo') {
+        const result = await client.callApi('mcp.undo', {})
+        return successResponse(result)
+      }
+
+      if (name === 'workflow.redo') {
+        const result = await client.callApi('mcp.redo', {})
+        return successResponse(result)
+      }
+
+      if (name === 'workflow.canUndo') {
+        const result = await client.callApi('mcp.canUndo', {})
+        return successResponse(result)
+      }
+
+      if (name === 'workflow.canRedo') {
+        const result = await client.callApi('mcp.canRedo', {})
+        return successResponse(result)
+      }
+
       // Handle code tools - can use file path OR direct content
       if (name === 'code.create') {
         const { filePath, name: nodeName, content, position } = args as {

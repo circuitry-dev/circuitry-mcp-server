@@ -85,6 +85,60 @@ const workflowTools: ToolDefinition[] = [
       type: 'Array<{ id, name, shape, color, connections: { to, label }[] }>',
       description: 'All flow nodes with their IDs, properties, and outgoing connections'
     }
+  },
+  {
+    name: 'workflow.layoutNodes',
+    namespace: 'workflow',
+    description: 'Auto-layout specific nodes using dagre (longest-path algorithm). Positions nodes and optimizes edge handles for clean flowchart appearance.',
+    parameters: [
+      { name: 'nodeIds', type: 'array', description: 'Array of node IDs to layout. Omit to layout all connected nodes.', required: false },
+      { name: 'direction', type: 'string', description: 'Layout direction: "vertical" (default) or "horizontal"', required: false, enum: ['vertical', 'horizontal'] },
+      { name: 'spacing', type: 'number', description: 'Gap between nodes in pixels (default: 80)', required: false }
+    ],
+    returns: {
+      type: '{ layoutedCount: number, nodeIds: string[] }',
+      description: 'Number of nodes layouted and their IDs'
+    }
+  },
+  {
+    name: 'workflow.undo',
+    namespace: 'workflow',
+    description: 'Undo the last workflow change. Reverts nodes, edges, and drawing data to previous state. Use this when changes need to be reverted or the user asks to undo.',
+    parameters: [],
+    returns: {
+      type: 'boolean',
+      description: 'true if undo was successful, false if nothing to undo'
+    }
+  },
+  {
+    name: 'workflow.redo',
+    namespace: 'workflow',
+    description: 'Redo the last undone change. Restores nodes, edges, and drawing data to the next state.',
+    parameters: [],
+    returns: {
+      type: 'boolean',
+      description: 'true if redo was successful, false if nothing to redo'
+    }
+  },
+  {
+    name: 'workflow.canUndo',
+    namespace: 'workflow',
+    description: 'Check if undo is available. Call before undo to verify there are changes to revert.',
+    parameters: [],
+    returns: {
+      type: 'boolean',
+      description: 'true if there are changes that can be undone'
+    }
+  },
+  {
+    name: 'workflow.canRedo',
+    namespace: 'workflow',
+    description: 'Check if redo is available. Call before redo to verify there are changes to restore.',
+    parameters: [],
+    returns: {
+      type: 'boolean',
+      description: 'true if there are changes that can be redone'
+    }
   }
 ]
 
@@ -108,6 +162,35 @@ const nodeTools: ToolDefinition[] = [
       { name: 'nodeId', type: 'string', description: 'The unique ID of the node', required: true }
     ],
     returns: { type: 'NodeInfo | null', description: 'Node info or null if not found' }
+  },
+  {
+    name: 'nodes.search',
+    namespace: 'nodes',
+    description: `Search workflow nodes by name or content. Returns ALL matches with confidence scores - let AI decide which is most relevant.
+
+Use cases:
+- "the validation node" → searches for nodes with "validation" in name
+- "sheet with customer data" → searches sheet headers and data sample
+- "authentication code" → searches code node contents
+
+Content searched by type:
+- sheet: headers + first 100 rows of data
+- code: first 1000 chars
+- text/agent: full content
+- flow: displayName + content
+
+Large sheets (>1000 rows) are skipped by default to avoid slowness. Use includeLargeSheets: true to include them.`,
+    parameters: [
+      { name: 'query', type: 'string', description: 'Search term (natural language supported)', required: true },
+      { name: 'limit', type: 'number', description: 'Max results to return (default: 20)', required: false },
+      { name: 'types', type: 'array', description: 'Filter by node types (e.g., ["code", "sheet"])', required: false },
+      { name: 'searchContent', type: 'boolean', description: 'Include content search (default: true)', required: false },
+      { name: 'includeLargeSheets', type: 'boolean', description: 'Search sheets with >1000 rows (default: false, may be slow)', required: false }
+    ],
+    returns: {
+      type: '{ results: NodeSearchResult[], skippedLargeSheets?: SkippedLargeSheet[] }',
+      description: 'Results sorted by confidence (1.0=exact, 0.7-0.9=partial, 0.6=content). Skipped sheets listed if any.'
+    }
   },
   {
     name: 'nodes.update',
@@ -164,6 +247,12 @@ const nodeTools: ToolDefinition[] = [
         type: 'number',
         description: 'Gap between nodes in pixels (default: 60)',
         required: false
+      },
+      {
+        name: 'autoLayout',
+        type: 'boolean',
+        description: 'Run dagre auto-layout after creating nodes for optimal positioning (default: false)',
+        required: false
       }
     ],
     returns: {
@@ -209,20 +298,29 @@ const nodeTools: ToolDefinition[] = [
   {
     name: 'nodes.insertBetween',
     namespace: 'nodes',
-    description: 'Insert a new node between two connected nodes. Removes existing edge and creates two new edges (source→newNode→target).',
+    description: `Insert node(s) between two connected nodes. Removes existing edge and creates new edges through the inserted nodes.
+
+Use \`node\` for single insertion: Source → NewNode → Target
+Use \`nodes\` for chain insertion: Source → A → B → C → Target`,
     parameters: [
       { name: 'sourceId', type: 'string', description: 'Source node ID (start of existing edge)', required: true },
       { name: 'targetId', type: 'string', description: 'Target node ID (end of existing edge)', required: true },
       {
         name: 'node',
         type: 'object',
-        description: '{ name, shape?, color? } - new node to insert. Shape: rounded, diamond, pill, cylinder, parallelogram',
-        required: true
+        description: '{ name, shape?, color? } - single node to insert (use OR nodes, not both)',
+        required: false
+      },
+      {
+        name: 'nodes',
+        type: 'array',
+        description: '[{ name, shape?, color? }] - array of nodes to insert in sequence (use OR node, not both)',
+        required: false
       }
     ],
     returns: {
-      type: '{ nodeId, removedEdgeId, newEdgeIds }',
-      description: 'IDs of created node, removed edge, and two new edges [sourceToNew, newToTarget]'
+      type: '{ nodeIds, removedEdgeId, newEdgeIds, nodeId? }',
+      description: 'Created node IDs, removed edge ID, and new edge IDs. nodeId included for single-node backward compatibility.'
     }
   }
 ]
@@ -268,12 +366,51 @@ const codeTools: ToolDefinition[] = [
     returns: { type: '{ nodeIds: string[], errors: string[] }', description: 'Created node IDs and any errors' }
   },
   {
+    name: 'code.getLineCount',
+    namespace: 'code',
+    description: 'Get the number of lines in a code node. Useful for planning chunked reads of large files.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Code node ID or name', required: true }
+    ],
+    returns: { type: 'number | null', description: 'Line count, or null if node not found' }
+  },
+  {
+    name: 'code.getCode',
+    namespace: 'code',
+    description: `Get code from a Code node. Supports optional line range for large files (like Claude Code's Read tool).
+
+Without offset/limit: returns full code.
+With offset/limit: returns specific lines (0-indexed).
+
+Example: offset=100, limit=50 returns lines 100-149.`,
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Code node ID or name', required: true },
+      { name: 'offset', type: 'number', description: 'Starting line number (0-indexed)', required: false },
+      { name: 'limit', type: 'number', description: 'Number of lines to return', required: false }
+    ],
+    returns: { type: 'string | null', description: 'Code content (full or specified range)' }
+  },
+  {
     name: 'code.setCode',
     namespace: 'code',
     description: 'Update code content in a code node. If node is EServer-sourced, will sync to source file.',
     parameters: [
       { name: 'nodeId', type: 'string', description: 'Code node ID', required: true },
       { name: 'code', type: 'string', description: 'Source code to set', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'code.setLines',
+    namespace: 'code',
+    description: `Replace a range of lines in a code node. More efficient than setCode for partial updates.
+
+The number of lines being replaced equals the length of the 'lines' array.
+Lines at startLine through startLine + lines.length - 1 will be replaced.`,
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Code node ID or name', required: true },
+      { name: 'startLine', type: 'number', description: 'Starting line number (0-indexed)', required: true },
+      { name: 'lines', type: 'array', description: 'Array of line strings to insert/replace', required: true }
     ],
     returns: { type: 'boolean', description: 'True if successful' }
   }
@@ -302,6 +439,241 @@ const sheetTools: ToolDefinition[] = [
       { name: 'headers', type: 'array', description: 'Optional column headers', required: false }
     ],
     returns: { type: 'boolean', description: 'True if successful' }
+  },
+  // ===== Metadata Operations =====
+  {
+    name: 'sheet.getRowCount',
+    namespace: 'sheet',
+    description: 'Get the number of rows in a Sheet. Use for planning pagination/chunked reads.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true }
+    ],
+    returns: { type: 'number | null', description: 'Row count, or null if not found' }
+  },
+  {
+    name: 'sheet.getColumnCount',
+    namespace: 'sheet',
+    description: 'Get the number of columns in a Sheet.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true }
+    ],
+    returns: { type: 'number | null', description: 'Column count, or null if not found' }
+  },
+  {
+    name: 'sheet.getHeaders',
+    namespace: 'sheet',
+    description: 'Get the column headers of a Sheet.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true }
+    ],
+    returns: { type: 'string[] | null', description: 'Headers array, or null if not found' }
+  },
+  // ===== Chunked Read Operations =====
+  {
+    name: 'sheet.getRows',
+    namespace: 'sheet',
+    description: 'Get a range of rows from a Sheet (0-indexed, inclusive). Use for large sheets instead of getData.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'startRow', type: 'number', description: 'Starting row index (0-indexed)', required: true },
+      { name: 'endRow', type: 'number', description: 'Ending row index (inclusive)', required: true }
+    ],
+    returns: { type: 'any[][] | null', description: '2D array of row data' }
+  },
+  {
+    name: 'sheet.getColumn',
+    namespace: 'sheet',
+    description: 'Get an entire column from a Sheet by index or letter.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'col', type: 'string', description: 'Column index (0-based number) or letter (e.g., "A", "B", "AA")', required: true }
+    ],
+    returns: { type: 'any[] | null', description: 'Array of column values' }
+  },
+  {
+    name: 'sheet.getDataPaginated',
+    namespace: 'sheet',
+    description: 'Get sheet data with pagination. Best for large sheets (100K+ rows).',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'page', type: 'number', description: 'Page number (0-indexed)', required: true },
+      { name: 'pageSize', type: 'number', description: 'Rows per page (recommended: 100-1000)', required: true }
+    ],
+    returns: {
+      type: '{ data, page, pageSize, totalRows, totalPages, hasMore }',
+      description: 'Paginated data with metadata'
+    }
+  },
+  // ===== Cell Operations =====
+  {
+    name: 'sheet.getCell',
+    namespace: 'sheet',
+    description: 'Get a single cell value from a Sheet.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'row', type: 'number', description: 'Row index (0-indexed)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-indexed)', required: true }
+    ],
+    returns: { type: 'any', description: 'Cell value' }
+  },
+  {
+    name: 'sheet.setCell',
+    namespace: 'sheet',
+    description: 'Set a single cell value in a Sheet. Can also set formulas (start with =).',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'row', type: 'number', description: 'Row index (0-indexed)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-indexed)', required: true },
+      { name: 'value', type: 'any', description: 'Value to set (or formula starting with =)', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'sheet.getCellInfo',
+    namespace: 'sheet',
+    description: 'Get detailed cell info including formula and computed value.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'row', type: 'number', description: 'Row index (0-indexed)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-indexed)', required: true }
+    ],
+    returns: { type: '{ raw, computed, formula?, error? } | null', description: 'Cell info with raw/computed values' }
+  },
+  // ===== Row CRUD Operations =====
+  {
+    name: 'sheet.insertRow',
+    namespace: 'sheet',
+    description: 'Insert a row at a specific position.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'rowIndex', type: 'number', description: 'Position to insert (0-indexed)', required: true },
+      { name: 'data', type: 'array', description: 'Row data as array', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'sheet.deleteRow',
+    namespace: 'sheet',
+    description: 'Delete a row at a specific position.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'rowIndex', type: 'number', description: 'Row to delete (0-indexed)', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'sheet.updateRow',
+    namespace: 'sheet',
+    description: 'Replace an entire row at a specific position.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'rowIndex', type: 'number', description: 'Row to update (0-indexed)', required: true },
+      { name: 'data', type: 'array', description: 'New row data', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  // ===== Column CRUD Operations =====
+  {
+    name: 'sheet.insertColumn',
+    namespace: 'sheet',
+    description: 'Insert a column at a specific position.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'colIndex', type: 'number', description: 'Position to insert (0-indexed)', required: true },
+      { name: 'data', type: 'array', description: 'Column data (one value per row)', required: true },
+      { name: 'header', type: 'string', description: 'Optional column header', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'sheet.deleteColumn',
+    namespace: 'sheet',
+    description: 'Delete a column at a specific position.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'colIndex', type: 'number', description: 'Column to delete (0-indexed)', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  // ===== Batch Operations (for AI workflows) =====
+  {
+    name: 'sheet.setCells',
+    namespace: 'sheet',
+    description: 'Set multiple cells in one call - efficient for sparse updates. Values starting with "=" are treated as formulas.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      {
+        name: 'cells',
+        type: 'array',
+        description: 'Array of cell updates: [{ row: 0, col: 2, value: "text" }, { row: 5, col: 2, value: "=A6*B6" }]',
+        required: true,
+        items: { type: 'object' }
+      }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'sheet.fillRange',
+    namespace: 'sheet',
+    description: 'Fill a range with a formula pattern - efficient for computed columns/rows. Use {row} for 1-indexed row number (Excel-style), {col} for column letter.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'formula', type: 'string', description: 'Formula pattern with {row}/{col} placeholders (e.g., "=A{row}*B{row}")', required: true },
+      { name: 'col', type: 'number', description: 'Column index for vertical fill (0-indexed)', required: false },
+      { name: 'startRow', type: 'number', description: 'Start row (0-indexed, defaults to 0)', required: false },
+      { name: 'endRow', type: 'number', description: 'End row (0-indexed, defaults to last row)', required: false },
+      { name: 'row', type: 'number', description: 'Row index for horizontal fill (0-indexed)', required: false },
+      { name: 'startCol', type: 'number', description: 'Start column for horizontal fill (0-indexed)', required: false },
+      { name: 'endCol', type: 'number', description: 'End column for horizontal fill (0-indexed)', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  // ===== Formula Operations =====
+  {
+    name: 'sheet.setCellFormula',
+    namespace: 'sheet',
+    description: 'Set a formula for a cell. Formulas must start with =.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'row', type: 'number', description: 'Row index (0-indexed)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-indexed)', required: true },
+      { name: 'formula', type: 'string', description: 'Formula string (e.g., "=SUM(A1:A10)")', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'sheet.getCellFormula',
+    namespace: 'sheet',
+    description: 'Get the formula string for a cell.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true },
+      { name: 'row', type: 'number', description: 'Row index (0-indexed)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-indexed)', required: true }
+    ],
+    returns: { type: 'string | null', description: 'Formula string or null if no formula' }
+  },
+  {
+    name: 'sheet.getFormulas',
+    namespace: 'sheet',
+    description: 'Get all formulas in a Sheet as a map of cell keys to formula strings.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Sheet node ID or name', required: true }
+    ],
+    returns: { type: 'Record<string, string> | null', description: 'Map of cellKey to formula (e.g., {"A1": "=SUM(B1:B5)"})' }
+  },
+  {
+    name: 'sheet.listFunctions',
+    namespace: 'sheet',
+    description: `List all available formula functions. Sheets support ALL standard Excel/Google Sheets functions including:
+- Math: SUM, AVERAGE, MIN, MAX, ROUND, ABS, SQRT, etc.
+- Lookup: VLOOKUP, HLOOKUP, INDEX, MATCH, LOOKUP
+- Text: CONCAT, LEFT, RIGHT, MID, LEN, TRIM, UPPER, LOWER
+- Logic: IF, AND, OR, NOT, IFERROR, SWITCH
+- Date: TODAY, NOW, DATE, YEAR, MONTH, DAY
+- Stats: COUNT, COUNTA, COUNTIF, SUMIF, AVERAGEIF
+And 50+ more functions.`,
+    parameters: [],
+    returns: { type: 'string[]', description: 'Array of available function names' }
   }
 ]
 
