@@ -267,6 +267,11 @@ export async function startServer(): Promise<void> {
         return successResponse(result)
       }
 
+      if (name === 'workflow.getSelectionContext') {
+        const result = await client.callApi('mcp.getSelectionContext', {})
+        return successResponse(result)
+      }
+
       // Handle code tools - can use file path OR direct content
       if (name === 'code.create') {
         const { filePath, name: nodeName, content, position } = args as {

@@ -139,6 +139,16 @@ const workflowTools: ToolDefinition[] = [
       type: 'boolean',
       description: 'true if there are changes that can be redone'
     }
+  },
+  {
+    name: 'workflow.getSelectionContext',
+    namespace: 'workflow',
+    description: 'Get currently selected nodes and what is selected within them (cells in sheets, text in code/text/agent nodes). Use this to understand what the user is referring to when they say "this", "what does this do?", "explain this", etc. Returns empty array if nothing is selected.',
+    parameters: [],
+    returns: {
+      type: 'object',
+      description: 'Selection context with selectedNodes array. Each node has: nodeId, name, type, and optional cellSelection (for sheets: range like "A1:B5", cells array, values) or textSelection (for code/text/agent: text content, startLine, endLine)'
+    }
   }
 ]
 
