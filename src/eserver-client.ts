@@ -372,6 +372,41 @@ export class EServerClient {
   }
 
   /**
+   * Create code nodes organized in named groups with flow node headers.
+   * Each group gets a label header with its code files arranged below it.
+   */
+  async createCodeNodesGrouped(
+    groups: Array<{
+      name: string
+      files: Array<{ path: string; name?: string }>
+      color?: string
+    }>,
+    layout?: string
+  ): Promise<{ nodeIds: string[]; groupHeaderIds: string[] }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/files/create-code-nodes-grouped`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          groups,
+          layout: layout || 'horizontal',
+          mcpSessionId: this.mcpSessionId
+        })
+      })
+
+      if (response.ok) {
+        return await response.json()
+      } else {
+        const error = await response.text()
+        throw new Error(`Failed to create grouped code nodes: ${error}`)
+      }
+    } catch (error) {
+      log('Create grouped code nodes failed:', error)
+      throw error
+    }
+  }
+
+  /**
    * Read a file from the local filesystem via EServer
    */
   async readFile(filePath: string): Promise<FileReadResult> {

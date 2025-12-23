@@ -298,6 +298,50 @@ export async function startServer(): Promise<void> {
         return successResponse(result)
       }
 
+      if (name === 'code.createBatchGrouped') {
+        const { groups, layout } = args as {
+          groups: Array<{
+            name: string
+            files: Array<{ path: string; name?: string }>
+            color?: string
+          }>
+          layout?: string
+        }
+        const result = await client.createCodeNodesGrouped(groups, layout)
+        return successResponse(result)
+      }
+
+      // Handle drawing.getImage - return image in a format Claude can see
+      if (name === 'drawing.getImage') {
+        const result = await client.callApi(name, args as Record<string, unknown>) as {
+          imageData?: string
+          width?: number
+          height?: number
+          strokeCount?: number
+        }
+
+        if (result.imageData && result.imageData.startsWith('data:image/png;base64,')) {
+          // Extract base64 data without the data URL prefix
+          const base64Data = result.imageData.replace('data:image/png;base64,', '')
+          return {
+            content: [
+              {
+                type: 'image' as const,
+                data: base64Data,
+                mimeType: 'image/png'
+              },
+              {
+                type: 'text' as const,
+                text: `Drawing captured: ${result.strokeCount} strokes, ${Math.round(result.width || 0)}x${Math.round(result.height || 0)}px`
+              }
+            ]
+          }
+        }
+
+        // No drawing data
+        return successResponse({ message: 'No drawing found on canvas', strokeCount: 0 })
+      }
+
       // For all other tools, relay to Circuitry API
       // The EServer bridge passes args as an object to the Circuitry API
       // API methods support both direct args: nodes.get("id") and object args: nodes.get({ nodeId: "id" })

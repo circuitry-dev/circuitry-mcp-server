@@ -376,6 +376,22 @@ const codeTools: ToolDefinition[] = [
     returns: { type: '{ nodeIds: string[], errors: string[] }', description: 'Created node IDs and any errors' }
   },
   {
+    name: 'code.createBatchGrouped',
+    namespace: 'code',
+    description: `Create code nodes organized in named groups with flow node headers.
+Each group gets a label header (flow node) with its code files arranged below it.
+Groups are placed side-by-side (horizontal) or stacked (vertical).
+
+IMPORTANT: Provide descriptive names for each file. For Next.js page.tsx files, derive the name from the folder path (e.g., "/app/login/page.tsx" → "Login", "/app/dashboard/settings/page.tsx" → "Dashboard Settings"). Avoid generic names like "page" or "index".
+
+Example: Organize files by folder structure like "Controllers", "Services", "Models".`,
+    parameters: [
+      { name: 'groups', type: 'array', description: 'Array of groups: [{ name: "Auth Screens", files: [{ path: "/app/login/page.tsx", name: "Login" }, { path: "/app/signup/page.tsx", name: "Signup" }], color?: "#6366f1" }]', required: true },
+      { name: 'layout', type: 'string', description: 'How to arrange groups: "horizontal" places groups side-by-side (default), "vertical" stacks groups top-to-bottom', required: false, enum: ['horizontal', 'vertical'] }
+    ],
+    returns: { type: '{ nodeIds: string[], groupHeaderIds: string[] }', description: 'All node IDs and group header IDs' }
+  },
+  {
     name: 'code.getLineCount',
     namespace: 'code',
     description: 'Get the number of lines in a code node. Useful for planning chunked reads of large files.',
@@ -688,6 +704,142 @@ And 50+ more functions.`,
 ]
 
 // ============================================================================
+// Text Node Tools (markdown/documentation nodes with LaTeX support)
+// ============================================================================
+
+const textTools: ToolDefinition[] = [
+  {
+    name: 'text.create',
+    namespace: 'text',
+    description: `Create a Text (documentation) node with markdown and LaTeX support.
+
+Text nodes are ideal for:
+- Documentation and explanations
+- Mathematical formulas using LaTeX ($...$ for inline, $$...$$ for block)
+- Rich text content with headers, lists, code blocks
+- Plans, discussions, and progress tracking in CodeBook view
+
+In CodeBook: Use codebook.addCell('text') instead for proper cell insertion.`,
+    parameters: [
+      { name: 'name', type: 'string', description: 'Display name for the node', required: false },
+      { name: 'content', type: 'string', description: 'Markdown content. Use $...$ for inline math, $$...$$ for block math', required: false },
+      { name: 'position', type: 'object', description: 'Position {x, y} on canvas', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of created text node' }
+  },
+  {
+    name: 'text.getContent',
+    namespace: 'text',
+    description: 'Get markdown content from a Text node.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Text node ID or name', required: true }
+    ],
+    returns: { type: 'string | null', description: 'Markdown content or null if not found' }
+  },
+  {
+    name: 'text.setContent',
+    namespace: 'text',
+    description: 'Update markdown content in a Text node. Supports markdown and LaTeX.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Text node ID', required: true },
+      { name: 'content', type: 'string', description: 'Markdown content to set', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  }
+]
+
+// ============================================================================
+// CodeBook Tools (Jupyter/Colab-style notebook view)
+// ============================================================================
+
+const codebookTools: ToolDefinition[] = [
+  {
+    name: 'codebook.isOpen',
+    namespace: 'codebook',
+    description: 'Check if CodeBook (notebook view) is currently active. When CodeBook is open, node creation should use codebook.addCell for proper cell insertion.',
+    parameters: [],
+    returns: { type: 'boolean', description: 'True if CodeBook overlay is open' }
+  },
+  {
+    name: 'codebook.getState',
+    namespace: 'codebook',
+    description: 'Get CodeBook state including cell order, selected cell, and execution status. Useful for understanding the current notebook context.',
+    parameters: [],
+    returns: {
+      type: '{ isOpen, cellOrder, selectedCellId, isExecuting } | null',
+      description: 'CodeBook state or null if not available'
+    }
+  },
+  {
+    name: 'codebook.addCell',
+    namespace: 'codebook',
+    description: `Add a new cell to CodeBook. Creates a linked node in the workflow and inserts it in the cell order.
+
+Supported cell types:
+- **code**: Python/JavaScript code with execution
+- **text**: Markdown documentation with LaTeX support ($...$)
+- **agent**: AI-powered processing cell
+- **datagrid**: Spreadsheet/sheet for data
+- **chart**: Visualization cell
+- **image**: Image display cell
+
+This is the preferred way to add nodes when CodeBook is open. For workflow canvas, use code.create, text.create, or sheet.create instead.`,
+    parameters: [
+      { name: 'nodeType', type: 'string', description: 'Type of cell: code, text, agent, datagrid, chart, image', required: true, enum: ['code', 'text', 'agent', 'datagrid', 'chart', 'image'] },
+      { name: 'afterCellId', type: 'string', description: 'Insert after this cell ID (optional, defaults to end)', required: false },
+      { name: 'executionTarget', type: 'string', description: 'For code cells: pyodide, this-computer, or eserver:<id>', required: false }
+    ],
+    returns: { type: 'string | null', description: 'ID of created cell, or null if CodeBook is not open' }
+  },
+  {
+    name: 'codebook.open',
+    namespace: 'codebook',
+    description: 'Open CodeBook view for the current workflow. Switches to notebook-style linear view.',
+    parameters: [],
+    returns: { type: 'void', description: 'Opens CodeBook overlay' }
+  },
+  {
+    name: 'codebook.close',
+    namespace: 'codebook',
+    description: 'Close CodeBook view and return to workflow canvas.',
+    parameters: [],
+    returns: { type: 'void', description: 'Closes CodeBook overlay' }
+  },
+  {
+    name: 'codebook.runCell',
+    namespace: 'codebook',
+    description: 'Execute a specific cell in CodeBook.',
+    parameters: [
+      { name: 'cellId', type: 'string', description: 'ID of the cell to execute', required: true }
+    ],
+    returns: { type: 'void', description: 'Triggers cell execution' }
+  },
+  {
+    name: 'codebook.runAll',
+    namespace: 'codebook',
+    description: 'Execute all cells in CodeBook in order.',
+    parameters: [],
+    returns: { type: 'void', description: 'Triggers execution of all cells' }
+  },
+  {
+    name: 'codebook.getExecutionTarget',
+    namespace: 'codebook',
+    description: 'Get the current Python execution target for new code cells.',
+    parameters: [],
+    returns: { type: 'string', description: 'Execution target: pyodide, this-computer, or eserver:<id>' }
+  },
+  {
+    name: 'codebook.setExecutionTarget',
+    namespace: 'codebook',
+    description: 'Set the Python execution target for new code cells.',
+    parameters: [
+      { name: 'target', type: 'string', description: 'Execution target: pyodide, this-computer, or eserver:<id>', required: true }
+    ],
+    returns: { type: 'void', description: 'Updates execution target' }
+  }
+]
+
+// ============================================================================
 // Agent Delegation Tools (complex tasks go to Circuitry's chat agent)
 // ============================================================================
 
@@ -727,6 +879,26 @@ const agentTools: ToolDefinition[] = [
 ]
 
 // ============================================================================
+// Drawing Layer Tools (for sketch interpretation)
+// ============================================================================
+
+const drawingTools: ToolDefinition[] = [
+  {
+    name: 'drawing.getImage',
+    namespace: 'drawing',
+    description: 'Get the drawing layer as an image for visual interpretation. Use this when user sketches an idea and you need to "see" what they drew. Returns base64 PNG.',
+    parameters: [
+      { name: 'maxSize', type: 'number', description: 'Max dimension in pixels (default: 1024)', required: false },
+      { name: 'backgroundColor', type: 'string', description: 'Background color (default: transparent)', required: false }
+    ],
+    returns: {
+      type: '{ imageData: string, width: number, height: number, strokeCount: number }',
+      description: 'Base64 PNG image data and dimensions'
+    }
+  }
+]
+
+// ============================================================================
 // All Tool Definitions
 // ============================================================================
 
@@ -737,7 +909,10 @@ export const allToolDefinitions: ToolDefinition[] = [
   ...edgeTools,
   ...codeTools,
   ...sheetTools,
-  ...agentTools
+  ...textTools,
+  ...codebookTools,
+  ...agentTools,
+  ...drawingTools
 ]
 
 // ============================================================================
