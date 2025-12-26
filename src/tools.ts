@@ -895,6 +895,116 @@ const drawingTools: ToolDefinition[] = [
       type: '{ imageData: string, width: number, height: number, strokeCount: number }',
       description: 'Base64 PNG image data and dimensions'
     }
+  },
+  {
+    name: 'drawing.getActiveDocument',
+    namespace: 'drawing',
+    description: 'Get information about the active drawing document. Use to determine context (notepad/designer/workflow) and whether HTML components exist.',
+    parameters: [],
+    returns: {
+      type: '{ type: "notepad" | "designer" | "workflow", documentId: string | null, name: string | null, hasHtmlComponents: boolean, htmlComponentCount: number } | null',
+      description: 'Active document info or null if no drawing layer is active'
+    }
+  }
+]
+
+// ============================================================================
+// HTML Component Tools (for drawing layer HTML integration)
+// ============================================================================
+
+const htmlTools: ToolDefinition[] = [
+  {
+    name: 'html.create',
+    namespace: 'html',
+    description: `Create HTML content in Circuitry. In WORKFLOW context, there are TWO options - ASK THE USER which they prefer (first time or when unclear):
+
+**target: "drawing"** (Drawing Layer) - Default
+- Quick visual prototypes, annotations, mockups
+- Renders on the canvas drawing layer
+- Use HTML Pointer tool to interact with form elements
+- Good for: rapid iteration, mixing with drawings/strokes
+
+**target: "node"** (Web Node) - Creates a workflow node
+- Data-driven content with inputs from other nodes
+- Has AI wizard for iterative refinement
+- Can execute JavaScript on workflow run
+- Good for: dynamic content, workflow integration
+
+In DESIGNER or NOTEPAD context: Only drawing layer is available (ignore target parameter).
+
+Position is auto-calculated if not provided (avoids overlapping existing elements).`,
+    parameters: [
+      { name: 'name', type: 'string', description: 'Display name (e.g., "Login Form", "Nav Menu")', required: true },
+      { name: 'html', type: 'string', description: 'Full HTML structure', required: true },
+      { name: 'css', type: 'string', description: 'Scoped CSS for the component', required: true },
+      { name: 'js', type: 'string', description: 'Optional JavaScript for interactivity', required: false },
+      { name: 'target', type: 'string', description: 'Where to create: "drawing" (canvas layer, default) or "node" (Web Node). In workflow, ASK USER if not specified.', required: false },
+      { name: 'position', type: 'object', description: 'Position { x, y } on canvas (auto-calculated if not provided)', required: false },
+      { name: 'dimensions', type: 'object', description: 'Size { width, height } in pixels (default: 320x200)', required: false },
+      { name: 'isolated', type: 'boolean', description: 'CSS isolation: true = Shadow DOM (default), false = inherits global CSS', required: false }
+    ],
+    returns: { type: 'string', description: 'Component ID or Node ID' }
+  },
+  {
+    name: 'html.update',
+    namespace: 'html',
+    description: 'Update an existing HTML component. Only provided fields will be updated.',
+    parameters: [
+      { name: 'id', type: 'string', description: 'Component ID', required: true },
+      { name: 'name', type: 'string', description: 'New display name', required: false },
+      { name: 'html', type: 'string', description: 'New HTML structure', required: false },
+      { name: 'css', type: 'string', description: 'New CSS styles', required: false },
+      { name: 'js', type: 'string', description: 'New JavaScript', required: false },
+      { name: 'position', type: 'object', description: 'New position { x, y }', required: false },
+      { name: 'dimensions', type: 'object', description: 'New size { width, height }', required: false },
+      { name: 'rotation', type: 'number', description: 'Rotation in degrees', required: false },
+      { name: 'zIndex', type: 'number', description: 'Z-index for layering', required: false },
+      { name: 'locked', type: 'boolean', description: 'Lock from editing', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'html.delete',
+    namespace: 'html',
+    description: 'Delete an HTML component from the drawing layer.',
+    parameters: [
+      { name: 'id', type: 'string', description: 'Component ID', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if deleted' }
+  },
+  {
+    name: 'html.list',
+    namespace: 'html',
+    description: 'List all HTML components in the current drawing layer.',
+    parameters: [],
+    returns: {
+      type: 'Array<{ id, name, position, dimensions, isolated }>',
+      description: 'Array of component summaries'
+    }
+  },
+  {
+    name: 'html.get',
+    namespace: 'html',
+    description: 'Get full details of an HTML component including HTML, CSS, and JS content.',
+    parameters: [
+      { name: 'id', type: 'string', description: 'Component ID', required: true }
+    ],
+    returns: {
+      type: 'HtmlComponentInfo | null',
+      description: 'Full component details: { id, name, html, css, js, position, dimensions, rotation, isolated, zIndex, locked }'
+    }
+  },
+  {
+    name: 'html.getByName',
+    namespace: 'html',
+    description: 'Get an HTML component by its display name. Case-insensitive search. Use this to find components like "Login Form" or "Navigation Menu" without needing to know the ID.',
+    parameters: [
+      { name: 'name', type: 'string', description: 'Component display name (e.g., "Login Form")', required: true }
+    ],
+    returns: {
+      type: 'HtmlComponentInfo | null',
+      description: 'Full component details or null if not found'
+    }
   }
 ]
 
@@ -912,7 +1022,8 @@ export const allToolDefinitions: ToolDefinition[] = [
   ...textTools,
   ...codebookTools,
   ...agentTools,
-  ...drawingTools
+  ...drawingTools,
+  ...htmlTools
 ]
 
 // ============================================================================
