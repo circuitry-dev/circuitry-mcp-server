@@ -342,6 +342,38 @@ export async function startServer(): Promise<void> {
         return successResponse({ message: 'No drawing found on canvas', strokeCount: 0 })
       }
 
+      // Handle screen.capture - return screen image in a format Claude can see
+      if (name === 'screen.capture') {
+        const result = await client.callApi(name, args as Record<string, unknown>) as {
+          imageData?: string
+          width?: number
+          height?: number
+          screenId?: string
+          screenName?: string
+        } | null
+
+        if (result?.imageData && result.imageData.startsWith('data:image/png;base64,')) {
+          // Extract base64 data without the data URL prefix
+          const base64Data = result.imageData.replace('data:image/png;base64,', '')
+          return {
+            content: [
+              {
+                type: 'image' as const,
+                data: base64Data,
+                mimeType: 'image/png'
+              },
+              {
+                type: 'text' as const,
+                text: `Screen captured: "${result.screenName}" (${result.screenId}), ${result.width}x${result.height}px`
+              }
+            ]
+          }
+        }
+
+        // No screen captured
+        return successResponse({ message: 'Failed to capture screen. Make sure you are in Designer mode with a screen visible.', screenId: null })
+      }
+
       // For all other tools, relay to Circuitry API
       // The EServer bridge passes args as an object to the Circuitry API
       // API methods support both direct args: nodes.get("id") and object args: nodes.get({ nodeId: "id" })

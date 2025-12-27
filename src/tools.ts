@@ -943,7 +943,15 @@ Position is auto-calculated if not provided (avoids overlapping existing element
 - Use CSS: \`box-sizing: border-box; height: 100%;\` to fill container properly
 - Use \`line-height: 1;\` on text to prevent extra spacing
 - Use \`padding: 0;\` on buttons to prevent unexpected sizing
-- iPhone 15: 393x852 total screen size`,
+- iPhone 15: 393x852 total screen size
+
+**COLOR CONTRAST GUIDELINES:**
+- Dark backgrounds (#1a1a1a, #1e293b): use white or light text (#ffffff, #f8fafc)
+- Light backgrounds (#ffffff, #f8fafc): use dark text (#1a1a1a, #1e293b, #374151)
+- Gradient backgrounds: ensure text contrasts with ALL parts of the gradient
+- Subtle text (labels, hints): use #64748b on light, #94a3b8 on dark
+- Links/accents: #6366f1 (indigo) works on both light and dark backgrounds
+- **AVOID**: light gray text on white, dark gray on dark backgrounds`,
     parameters: [
       { name: 'name', type: 'string', description: 'Display name (e.g., "Login Form", "Nav Menu")', required: true },
       { name: 'html', type: 'string', description: 'Full HTML structure', required: true },
@@ -1145,6 +1153,24 @@ Or use "custom" with explicit dimensions.`,
       { name: 'screenId', type: 'string', description: 'Screen ID or name', required: true }
     ],
     returns: { type: 'boolean', description: 'True if screen was selected' }
+  },
+  {
+    name: 'screen.capture',
+    namespace: 'screen',
+    description: `Capture a Designer screen as a PNG image. Use this to verify layouts and catch visual issues like:
+- Clipped content (text/buttons cut off by container)
+- Poor contrast (light text on light background)
+- Overlapping elements
+- Sizing problems
+
+Returns the screen as a base64 PNG image that Claude can analyze visually.`,
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name (optional - uses selected screen if not specified)', required: false }
+    ],
+    returns: {
+      type: '{ imageData: string, width: number, height: number, screenId: string, screenName: string }',
+      description: 'Base64 PNG image data and screen dimensions'
+    }
   }
 ]
 
