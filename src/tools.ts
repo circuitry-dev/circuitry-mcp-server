@@ -956,7 +956,8 @@ Position is auto-calculated if not provided (avoids overlapping existing element
       { name: 'js', type: 'string', description: 'Optional JavaScript for interactivity', required: false },
       { name: 'target', type: 'string', description: 'Where to create: "drawing" (canvas layer, default) or "node" (Web Node). In workflow, ASK USER if not specified.', required: false },
       { name: 'screenId', type: 'string', description: 'Target screen ID or name (Designer mode only). If not specified, uses selected screen.', required: false },
-      { name: 'position', type: 'object', description: 'Position { x, y } relative to screen/canvas (auto-calculated if not provided)', required: false },
+      { name: 'container', type: 'string', description: 'Semantic container type (Designer mode): "header" (top), "footer" (bottom), "content" (main area), "nav" (navigation). Auto-positions based on type and groups for preview structure.', required: false, enum: ['header', 'footer', 'content', 'nav'] },
+      { name: 'position', type: 'object', description: 'Position { x, y } relative to screen/canvas. If container is set, auto-calculated based on semantic meaning.', required: false },
       { name: 'dimensions', type: 'object', description: 'Size { width, height } in pixels (default: 320x200)', required: false },
       { name: 'isolated', type: 'boolean', description: 'CSS isolation: true = Shadow DOM (default), false = inherits global CSS', required: false }
     ],
