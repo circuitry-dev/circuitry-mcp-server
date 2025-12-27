@@ -932,14 +932,26 @@ const htmlTools: ToolDefinition[] = [
 
 In DESIGNER or NOTEPAD context: Only drawing layer is available (ignore target parameter).
 
-Position is auto-calculated if not provided (avoids overlapping existing elements).`,
+**DESIGNER MODE:** Use screenId to specify which screen/artboard to add the component to. If not specified, uses the currently selected screen. Position is relative to the screen's top-left corner (0,0).
+
+Position is auto-calculated if not provided (avoids overlapping existing elements).
+
+**MOBILE UI SIZING GUIDELINES:**
+- Status bar: 44px height (iOS standard)
+- Headers/nav bars: **64px height** (not 56px - allows proper padding)
+- Bottom nav: 84px height (includes safe area)
+- Use CSS: \`box-sizing: border-box; height: 100%;\` to fill container properly
+- Use \`line-height: 1;\` on text to prevent extra spacing
+- Use \`padding: 0;\` on buttons to prevent unexpected sizing
+- iPhone 15: 393x852 total screen size`,
     parameters: [
       { name: 'name', type: 'string', description: 'Display name (e.g., "Login Form", "Nav Menu")', required: true },
       { name: 'html', type: 'string', description: 'Full HTML structure', required: true },
       { name: 'css', type: 'string', description: 'Scoped CSS for the component', required: true },
       { name: 'js', type: 'string', description: 'Optional JavaScript for interactivity', required: false },
       { name: 'target', type: 'string', description: 'Where to create: "drawing" (canvas layer, default) or "node" (Web Node). In workflow, ASK USER if not specified.', required: false },
-      { name: 'position', type: 'object', description: 'Position { x, y } on canvas (auto-calculated if not provided)', required: false },
+      { name: 'screenId', type: 'string', description: 'Target screen ID or name (Designer mode only). If not specified, uses selected screen.', required: false },
+      { name: 'position', type: 'object', description: 'Position { x, y } relative to screen/canvas (auto-calculated if not provided)', required: false },
       { name: 'dimensions', type: 'object', description: 'Size { width, height } in pixels (default: 320x200)', required: false },
       { name: 'isolated', type: 'boolean', description: 'CSS isolation: true = Shadow DOM (default), false = inherits global CSS', required: false }
     ],
@@ -948,7 +960,7 @@ Position is auto-calculated if not provided (avoids overlapping existing element
   {
     name: 'html.update',
     namespace: 'html',
-    description: 'Update an existing HTML component. Only provided fields will be updated.',
+    description: 'Update an existing HTML component. Only provided fields will be updated. **In Designer mode, operates on currently selected screen** - use screen.select first if needed.',
     parameters: [
       { name: 'id', type: 'string', description: 'Component ID', required: true },
       { name: 'name', type: 'string', description: 'New display name', required: false },
@@ -966,7 +978,7 @@ Position is auto-calculated if not provided (avoids overlapping existing element
   {
     name: 'html.delete',
     namespace: 'html',
-    description: 'Delete an HTML component from the drawing layer.',
+    description: 'Delete an HTML component from the drawing layer. **In Designer mode, operates on currently selected screen.**',
     parameters: [
       { name: 'id', type: 'string', description: 'Component ID', required: true }
     ],
@@ -975,7 +987,7 @@ Position is auto-calculated if not provided (avoids overlapping existing element
   {
     name: 'html.list',
     namespace: 'html',
-    description: 'List all HTML components in the current drawing layer.',
+    description: 'List all HTML components in the current drawing layer. **In Designer mode, lists components on currently selected screen.**',
     parameters: [],
     returns: {
       type: 'Array<{ id, name, position, dimensions, isolated }>',
@@ -985,7 +997,7 @@ Position is auto-calculated if not provided (avoids overlapping existing element
   {
     name: 'html.get',
     namespace: 'html',
-    description: 'Get full details of an HTML component including HTML, CSS, and JS content.',
+    description: 'Get full details of an HTML component including HTML, CSS, and JS content. **In Designer mode, searches currently selected screen** - use screen.select first if needed.',
     parameters: [
       { name: 'id', type: 'string', description: 'Component ID', required: true }
     ],
@@ -997,7 +1009,7 @@ Position is auto-calculated if not provided (avoids overlapping existing element
   {
     name: 'html.getByName',
     namespace: 'html',
-    description: 'Get an HTML component by its display name. Case-insensitive search. Use this to find components like "Login Form" or "Navigation Menu" without needing to know the ID.',
+    description: 'Get an HTML component by its display name. Case-insensitive search. Use this to find components like "Login Form" or "Navigation Menu" without needing to know the ID. **In Designer mode, searches currently selected screen.**',
     parameters: [
       { name: 'name', type: 'string', description: 'Component display name (e.g., "Login Form")', required: true }
     ],
@@ -1005,6 +1017,277 @@ Position is auto-calculated if not provided (avoids overlapping existing element
       type: 'HtmlComponentInfo | null',
       description: 'Full component details or null if not found'
     }
+  }
+]
+
+// ============================================================================
+// Designer Tools (Designer mode page/layout CRUD)
+// ============================================================================
+
+const designerTools: ToolDefinition[] = [
+  {
+    name: 'designer.getActive',
+    namespace: 'designer',
+    description: `Check if Designer mode is active and get current document info.
+
+Returns null if not in Designer mode. Use this before calling screen.* or layout.* tools.`,
+    parameters: [],
+    returns: {
+      type: '{ isDesigner: boolean, documentId: string, name: string, screenCount: number, selectedScreenId?: string } | null',
+      description: 'Designer document info or null if not in Designer'
+    }
+  },
+  {
+    name: 'designer.getMode',
+    namespace: 'designer',
+    description: 'Get the current Designer mode (design, layout, html, or preview).',
+    parameters: [],
+    returns: {
+      type: '"design" | "layout" | "html" | "preview" | null',
+      description: 'Current mode or null if not in Designer'
+    }
+  },
+  {
+    name: 'designer.setMode',
+    namespace: 'designer',
+    description: `Set the Designer mode.
+
+- **design**: Freehand drawing, sketching UI mockups
+- **layout**: Add structural containers (grids, sections)
+- **html**: Convert drawings to HTML, edit properties
+- **preview**: Interactive preview, test responsiveness`,
+    parameters: [
+      { name: 'mode', type: 'string', description: 'Mode to set: design, layout, html, or preview', required: true, enum: ['design', 'layout', 'html', 'preview'] }
+    ],
+    returns: { type: 'boolean', description: 'True if mode was set successfully' }
+  }
+]
+
+// ============================================================================
+// Screen Tools (Designer artboards/pages)
+// ============================================================================
+
+const screenTools: ToolDefinition[] = [
+  {
+    name: 'screen.list',
+    namespace: 'screen',
+    description: 'List all screens (pages/artboards) in the current Designer document.',
+    parameters: [],
+    returns: {
+      type: 'Array<{ id, name, position, dimensions, backgroundColor, devicePreset, order }>',
+      description: 'Array of screen summaries'
+    }
+  },
+  {
+    name: 'screen.get',
+    namespace: 'screen',
+    description: 'Get a screen by ID or name.',
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name', required: true }
+    ],
+    returns: {
+      type: 'ScreenInfo | null',
+      description: 'Full screen details including layouts and HTML components'
+    }
+  },
+  {
+    name: 'screen.create',
+    namespace: 'screen',
+    description: `Create a new screen (page/artboard) in the Designer.
+
+Device presets: iPhone 15, iPhone SE, iPad Pro 12", Desktop 1920, etc.
+Or use "custom" with explicit dimensions.`,
+    parameters: [
+      { name: 'name', type: 'string', description: 'Screen name (e.g., "Home", "Login", "Dashboard")', required: true },
+      { name: 'devicePreset', type: 'string', description: 'Device preset or "custom"', required: false },
+      { name: 'dimensions', type: 'object', description: 'Custom dimensions { width, height } - used when devicePreset is "custom"', required: false },
+      { name: 'backgroundColor', type: 'string', description: 'Background color (default: #ffffff)', required: false },
+      { name: 'position', type: 'object', description: 'Position { x, y } on canvas (auto-calculated if not provided)', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of created screen' }
+  },
+  {
+    name: 'screen.update',
+    namespace: 'screen',
+    description: 'Update screen properties (name, dimensions, backgroundColor).',
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name', required: true },
+      { name: 'name', type: 'string', description: 'New name', required: false },
+      { name: 'dimensions', type: 'object', description: 'New dimensions { width, height }', required: false },
+      { name: 'backgroundColor', type: 'string', description: 'New background color', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if updated successfully' }
+  },
+  {
+    name: 'screen.delete',
+    namespace: 'screen',
+    description: 'Delete a screen from the Designer.',
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if deleted' }
+  },
+  {
+    name: 'screen.duplicate',
+    namespace: 'screen',
+    description: 'Duplicate a screen with all its layouts and HTML components.',
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name to duplicate', required: true },
+      { name: 'newName', type: 'string', description: 'Name for the duplicated screen', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of the duplicated screen' }
+  },
+  {
+    name: 'screen.select',
+    namespace: 'screen',
+    description: 'Select a screen to make it active for editing.',
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if screen was selected' }
+  }
+]
+
+// ============================================================================
+// Layout Tools (Designer layout elements - grids, sections, containers)
+// ============================================================================
+
+const layoutTools: ToolDefinition[] = [
+  {
+    name: 'layout.list',
+    namespace: 'layout',
+    description: 'List all layout elements on the current or specified screen.',
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name (optional - uses current screen if not provided)', required: false }
+    ],
+    returns: {
+      type: 'Array<{ id, name, type, position, dimensions, style }>',
+      description: 'Array of layout element summaries'
+    }
+  },
+  {
+    name: 'layout.get',
+    namespace: 'layout',
+    description: 'Get a layout element by ID or name.',
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Layout ID or name', required: true }
+    ],
+    returns: {
+      type: 'LayoutElementInfo | null',
+      description: 'Full layout details including cells (for grids) and style'
+    }
+  },
+  {
+    name: 'layout.create',
+    namespace: 'layout',
+    description: `Create a layout element on a screen.
+
+**Layout Types:**
+- Semantic sections: header, footer, hero, sidebar
+- Grid layouts: grid-1col, grid-2col, grid-3col, grid-4col
+- Flex layouts: flex-row, flex-column
+- Containers: card, container
+
+Full-width types (header, footer, hero, grids, container) auto-snap to screen width.
+Semantic elements auto-position: header at top, footer at bottom.`,
+    parameters: [
+      { name: 'type', type: 'string', description: 'Layout type', required: true, enum: ['header', 'footer', 'hero', 'sidebar', 'grid-1col', 'grid-2col', 'grid-3col', 'grid-4col', 'flex-row', 'flex-column', 'card', 'container'] },
+      { name: 'name', type: 'string', description: 'Display name (optional - defaults to type name)', required: false },
+      { name: 'screenId', type: 'string', description: 'Screen ID or name (optional - uses current screen)', required: false },
+      { name: 'position', type: 'object', description: 'Position { x, y } (auto-calculated for semantic elements)', required: false },
+      { name: 'dimensions', type: 'object', description: 'Size { width, height } (uses defaults if not provided)', required: false },
+      { name: 'style', type: 'object', description: 'Style overrides { backgroundColor, padding, gap, borderRadius, etc. }', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of created layout element' }
+  },
+  {
+    name: 'layout.update',
+    namespace: 'layout',
+    description: 'Update a layout element (name, position, dimensions, style).',
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Layout ID or name', required: true },
+      { name: 'name', type: 'string', description: 'New name', required: false },
+      { name: 'position', type: 'object', description: 'New position { x, y }', required: false },
+      { name: 'dimensions', type: 'object', description: 'New dimensions { width, height }', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if updated' }
+  },
+  {
+    name: 'layout.delete',
+    namespace: 'layout',
+    description: 'Delete a layout element.',
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Layout ID or name', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if deleted' }
+  },
+  {
+    name: 'layout.setStyle',
+    namespace: 'layout',
+    description: `Set style properties on a layout element.
+
+**Available style properties:**
+- backgroundColor, borderColor, borderWidth, borderRadius, opacity
+- padding: { top, right, bottom, left }
+- gap (spacing between children)
+- justifyContent, alignItems (for flex/grid alignment)
+- widthMode, heightMode ('fixed' or 'flexible')
+- widthPercent, heightPercent (for responsive sizing)`,
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Layout ID or name', required: true },
+      { name: 'style', type: 'object', description: 'Style properties to set', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if style was set' }
+  },
+  {
+    name: 'layout.search',
+    namespace: 'layout',
+    description: 'Search for layout elements by name or type.',
+    parameters: [
+      { name: 'query', type: 'string', description: 'Search term (matches name)', required: false },
+      { name: 'type', type: 'string', description: 'Filter by layout type', required: false, enum: ['header', 'footer', 'hero', 'sidebar', 'grid-1col', 'grid-2col', 'grid-3col', 'grid-4col', 'flex-row', 'flex-column', 'card', 'container'] },
+      { name: 'screenId', type: 'string', description: 'Filter by screen', required: false }
+    ],
+    returns: {
+      type: 'Array<{ id, name, type, screenId, confidence }>',
+      description: 'Matching layouts with confidence scores'
+    }
+  },
+  {
+    name: 'layout.getCell',
+    namespace: 'layout',
+    description: 'Get details about a specific cell in a grid layout.',
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Grid layout ID or name', required: true },
+      { name: 'cellIndex', type: 'number', description: 'Cell index (0-based)', required: true }
+    ],
+    returns: {
+      type: '{ id, index, contentMode, style, htmlContent? } | null',
+      description: 'Cell details or null if not found'
+    }
+  },
+  {
+    name: 'layout.setCellStyle',
+    namespace: 'layout',
+    description: 'Set style properties on a specific grid cell.',
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Grid layout ID or name', required: true },
+      { name: 'cellIndex', type: 'number', description: 'Cell index (0-based)', required: true },
+      { name: 'style', type: 'object', description: 'Style properties { backgroundColor, justifyContent, alignItems, etc. }', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if style was set' }
+  },
+  {
+    name: 'layout.setCellContent',
+    namespace: 'layout',
+    description: 'Set HTML content for a grid cell. Use html.create for more complex components.',
+    parameters: [
+      { name: 'layoutId', type: 'string', description: 'Grid layout ID or name', required: true },
+      { name: 'cellIndex', type: 'number', description: 'Cell index (0-based)', required: true },
+      { name: 'html', type: 'string', description: 'HTML content for the cell', required: true },
+      { name: 'css', type: 'string', description: 'Optional CSS for the content', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if content was set' }
   }
 ]
 
@@ -1023,7 +1306,10 @@ export const allToolDefinitions: ToolDefinition[] = [
   ...codebookTools,
   ...agentTools,
   ...drawingTools,
-  ...htmlTools
+  ...htmlTools,
+  ...designerTools,
+  ...screenTools,
+  ...layoutTools
 ]
 
 // ============================================================================
