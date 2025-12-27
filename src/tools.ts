@@ -945,13 +945,10 @@ Position is auto-calculated if not provided (avoids overlapping existing element
 - Use \`padding: 0;\` on buttons to prevent unexpected sizing
 - iPhone 15: 393x852 total screen size
 
-**COLOR CONTRAST GUIDELINES:**
-- Dark backgrounds (#1a1a1a, #1e293b): use white or light text (#ffffff, #f8fafc)
-- Light backgrounds (#ffffff, #f8fafc): use dark text (#1a1a1a, #1e293b, #374151)
-- Gradient backgrounds: ensure text contrasts with ALL parts of the gradient
-- Subtle text (labels, hints): use #64748b on light, #94a3b8 on dark
-- Links/accents: #6366f1 (indigo) works on both light and dark backgrounds
-- **AVOID**: light gray text on white, dark gray on dark backgrounds`,
+**COLOR CONTRAST:** Ensure sufficient contrast between text and background.
+- **AVOID**: light text on light backgrounds, dark text on dark backgrounds
+- Gradient backgrounds: text must contrast with ALL parts of the gradient
+- When unsure, test readability - if hard to read, increase contrast`,
     parameters: [
       { name: 'name', type: 'string', description: 'Display name (e.g., "Login Form", "Nav Menu")', required: true },
       { name: 'html', type: 'string', description: 'Full HTML structure', required: true },
