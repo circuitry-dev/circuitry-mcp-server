@@ -959,7 +959,8 @@ Position is auto-calculated if not provided (avoids overlapping existing element
       { name: 'container', type: 'string', description: 'Semantic container type (Designer mode): "header" (top), "footer" (bottom), "content" (main area), "nav" (navigation). Auto-positions based on type and groups for preview structure.', required: false, enum: ['header', 'footer', 'content', 'nav'] },
       { name: 'position', type: 'object', description: 'Position { x, y } relative to screen/canvas. If container is set, auto-calculated based on semantic meaning.', required: false },
       { name: 'dimensions', type: 'object', description: 'Size { width, height } in pixels (default: 320x200)', required: false },
-      { name: 'isolated', type: 'boolean', description: 'CSS isolation: true = Shadow DOM (default), false = inherits global CSS', required: false }
+      { name: 'isolated', type: 'boolean', description: 'CSS isolation: true = Shadow DOM (default), false = inherits global CSS', required: false },
+      { name: 'href', type: 'string', description: 'Link URL or screen target. Use "#screen:ScreenName" for navigation between screens in preview (e.g., "#screen:Home", "#screen:Dashboard"). External URLs also supported.', required: false }
     ],
     returns: { type: 'string', description: 'Component ID or Node ID' }
   },
@@ -977,7 +978,8 @@ Position is auto-calculated if not provided (avoids overlapping existing element
       { name: 'dimensions', type: 'object', description: 'New size { width, height }', required: false },
       { name: 'rotation', type: 'number', description: 'Rotation in degrees', required: false },
       { name: 'zIndex', type: 'number', description: 'Z-index for layering', required: false },
-      { name: 'locked', type: 'boolean', description: 'Lock from editing', required: false }
+      { name: 'locked', type: 'boolean', description: 'Lock from editing', required: false },
+      { name: 'href', type: 'string', description: 'Link URL or screen target. Use "#screen:ScreenName" for navigation between screens. Set to empty string to remove link.', required: false }
     ],
     returns: { type: 'boolean', description: 'True if successful' }
   },
