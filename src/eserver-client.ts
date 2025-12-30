@@ -455,13 +455,29 @@ export class EServerClient {
    * Call a Circuitry API method via EServer
    */
   async callApi(method: string, args: Record<string, unknown> = {}): Promise<unknown> {
-    // If WebSocket is connected, use it for faster communication
-    if (this.wsConnected && this.ws) {
-      return this.callApiViaWs(method, args)
-    }
+    const start = performance.now()
+    const payloadSize = JSON.stringify(args).length
 
-    // Otherwise use HTTP
-    return this.callApiViaHttp(method, args)
+    try {
+      let result: unknown
+
+      // If WebSocket is connected, use it for faster communication
+      if (this.wsConnected && this.ws) {
+        result = await this.callApiViaWs(method, args)
+      } else {
+        // Otherwise use HTTP
+        result = await this.callApiViaHttp(method, args)
+      }
+
+      const elapsed = performance.now() - start
+      log(`[TIMING] ${method}: ${elapsed.toFixed(0)}ms (payload: ${payloadSize} bytes, transport: ${this.wsConnected ? 'ws' : 'http'})`)
+
+      return result
+    } catch (error) {
+      const elapsed = performance.now() - start
+      log(`[TIMING] ${method}: ${elapsed.toFixed(0)}ms (ERROR, payload: ${payloadSize} bytes)`)
+      throw error
+    }
   }
 
   /**

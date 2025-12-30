@@ -948,11 +948,20 @@ Position is auto-calculated if not provided (avoids overlapping existing element
 **COLOR CONTRAST:** Ensure sufficient contrast between text and background.
 - **AVOID**: light text on light backgrounds, dark text on dark backgrounds
 - Gradient backgrounds: text must contrast with ALL parts of the gradient
-- When unsure, test readability - if hard to read, increase contrast`,
+- When unsure, test readability - if hard to read, increase contrast
+
+**LAYOUT OPTIMIZATION (IMPORTANT):**
+After creating all components on a screen, call \`layout.analyze\` with autoFix to detect and fix issues automatically:
+1. Create all screen components
+2. Call \`layout.analyze({ screenId: "ScreenName", autoFix: true })\`
+3. Check \`appliedFixes\` in response to see what changed (updates your mental model)
+4. Use \`screen.capture\` to visually verify the layout looks correct`,
     parameters: [
       { name: 'name', type: 'string', description: 'Display name (e.g., "Login Form", "Nav Menu")', required: true },
-      { name: 'html', type: 'string', description: 'Full HTML structure', required: true },
-      { name: 'css', type: 'string', description: 'Scoped CSS for the component', required: true },
+      { name: 'html', type: 'string', description: 'Full HTML structure (use this OR htmlFile, not both)', required: false },
+      { name: 'css', type: 'string', description: 'Scoped CSS for the component (use this OR cssFile, not both)', required: false },
+      { name: 'htmlFile', type: 'string', description: 'Absolute path to HTML file (alternative to inline html param - MCP server reads file)', required: false },
+      { name: 'cssFile', type: 'string', description: 'Absolute path to CSS file (alternative to inline css param - MCP server reads file)', required: false },
       { name: 'js', type: 'string', description: 'Optional JavaScript for interactivity', required: false },
       { name: 'target', type: 'string', description: 'Where to create: "drawing" (canvas layer, default) or "node" (Web Node). In workflow, ASK USER if not specified.', required: false },
       { name: 'screenId', type: 'string', description: 'Target screen ID or name (Designer mode only). If not specified, uses selected screen.', required: false },
@@ -1104,7 +1113,9 @@ const screenTools: ToolDefinition[] = [
     description: `Create a new screen (page/artboard) in the Designer.
 
 Device presets: iPhone 15, iPhone SE, iPad Pro 12", Desktop 1920, etc.
-Or use "custom" with explicit dimensions.`,
+Or use "custom" with explicit dimensions.
+
+**TIP:** After adding components to a screen, run \`layout.analyze\` to check for layout issues and get suggested fixes. Screens can be resized taller if content overflows.`,
     parameters: [
       { name: 'name', type: 'string', description: 'Screen name (e.g., "Home", "Login", "Dashboard")', required: true },
       { name: 'devicePreset', type: 'string', description: 'Device preset or "custom"', required: false },
@@ -1314,6 +1325,64 @@ Semantic elements auto-position: header at top, footer at bottom.`,
       { name: 'css', type: 'string', description: 'Optional CSS for the content', required: false }
     ],
     returns: { type: 'boolean', description: 'True if content was set' }
+  },
+  {
+    name: 'layout.createSection',
+    namespace: 'layout',
+    description: `Create a section with both a layout container AND an HTML component inside it.
+This ensures proper structure where the layout defines the container bounds and the HTML component fills it with content.
+
+**Use this instead of separate layout.create + html.create calls** to get proper parent-child structure that shows correctly in layout view.
+
+Returns both layoutId and htmlId so you can reference either element later.`,
+    parameters: [
+      { name: 'name', type: 'string', description: 'Display name for the section (e.g., "Profile Card", "Settings Menu")', required: true },
+      { name: 'layoutType', type: 'string', description: 'Layout type: card, container, header, footer, etc.', required: false, enum: ['header', 'footer', 'hero', 'sidebar', 'grid-1col', 'grid-2col', 'grid-3col', 'grid-4col', 'flex-row', 'flex-column', 'card', 'container'] },
+      { name: 'container', type: 'string', description: 'Semantic container type - determines auto-positioning: header (top), footer (bottom), content (stacked)', required: false, enum: ['header', 'footer', 'nav', 'content'] },
+      { name: 'html', type: 'string', description: 'HTML content for the section', required: true },
+      { name: 'css', type: 'string', description: 'CSS styles for the HTML content', required: false },
+      { name: 'js', type: 'string', description: 'Optional JavaScript for interactivity', required: false },
+      { name: 'position', type: 'object', description: 'Position { x, y } - auto-calculated based on container if not provided', required: false },
+      { name: 'dimensions', type: 'object', description: 'Dimensions { width, height } - uses layout type defaults if not provided', required: false },
+      { name: 'screenId', type: 'string', description: 'Target screen ID or name (uses selected screen if not specified)', required: false },
+      { name: 'autoAnalyze', type: 'boolean', description: 'Run layout.analyze with autoFix after creation (default: false)', required: false }
+    ],
+    returns: { type: 'object', description: '{ layoutId: string, htmlId: string, analysis?: LayoutAnalysisResult }' }
+  },
+  {
+    name: 'layout.analyze',
+    namespace: 'layout',
+    description: `Analyze screen layout for issues like overlapping elements, clipping, or content extending beyond screen bounds.
+
+**IMPORTANT: Call this after creating screens/components to detect and fix layout problems.**
+
+**Use autoFix: true to automatically apply fixes** - the response includes \`appliedFixes\` showing what changed so you know the client state is updated.
+
+Returns:
+- hasIssues: Whether any problems were detected
+- issues: List of problems (overflow, overlap, clipped, footer-misplaced, header-misplaced, content-overflow)
+- suggestedScreenHeight: If content overflows, the recommended new height
+- fixes: Suggested fixes (empty if autoFix applied them)
+- appliedFixes: (when autoFix: true) Array of { fix, success, error? } showing what was changed
+
+Common issues detected:
+- Content extends beyond screen height (suggests increasing screen height)
+- Elements overlap each other
+- Footer not positioned at bottom of screen
+- Header not positioned at top of screen
+- Elements clipped by screen edges
+- **Internal content overflow** - HTML content inside a component is larger than its container (e.g., button bleeding out, text touching edges)
+
+**Workflow for creating layouts:**
+1. Create screens with screen.create
+2. Add layouts/components with layout.create, html.create
+3. Call layout.analyze with autoFix: true to detect and fix issues automatically
+4. Use screen.capture to visually verify the layout`,
+    parameters: [
+      { name: 'screenId', type: 'string', description: 'Screen ID or name to analyze (uses selected screen if not specified)', required: false },
+      { name: 'autoFix', type: 'boolean', description: 'When true, automatically apply suggested fixes and return appliedFixes showing what changed', required: false }
+    ],
+    returns: { type: 'object', description: 'Analysis result with issues, fixes applied (if autoFix), and component positions' }
   }
 ]
 

@@ -108,8 +108,10 @@ export async function startServer(): Promise<void> {
 
   // Handle call_tool request
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const toolStart = performance.now()
     const { name, arguments: args } = request.params
-    log(`Received call_tool request: ${name}`)
+    const argsSize = JSON.stringify(args || {}).length
+    log(`Received call_tool request: ${name} (args: ${argsSize} bytes)`)
 
     // Check if configured
     if (!isConfigured()) {
@@ -374,15 +376,73 @@ export async function startServer(): Promise<void> {
         return successResponse({ message: 'Failed to capture screen. Make sure you are in Designer mode with a screen visible.', screenId: null })
       }
 
+      // Handle html.create with file-based params
+      if (name === 'html.create') {
+        const { htmlFile, cssFile, html, css, ...restArgs } = args as {
+          htmlFile?: string
+          cssFile?: string
+          html?: string
+          css?: string
+          [key: string]: unknown
+        }
+
+        let finalHtml = html
+        let finalCss = css
+
+        // Read HTML from file if provided
+        if (htmlFile) {
+          try {
+            const fs = await import('fs/promises')
+            finalHtml = await fs.readFile(htmlFile, 'utf-8')
+            log(`[html.create] Read HTML from file: ${htmlFile} (${finalHtml.length} chars)`)
+          } catch (err) {
+            return errorResponse(`Failed to read HTML file: ${htmlFile} - ${err instanceof Error ? err.message : String(err)}`)
+          }
+        }
+
+        // Read CSS from file if provided
+        if (cssFile) {
+          try {
+            const fs = await import('fs/promises')
+            finalCss = await fs.readFile(cssFile, 'utf-8')
+            log(`[html.create] Read CSS from file: ${cssFile} (${finalCss.length} chars)`)
+          } catch (err) {
+            return errorResponse(`Failed to read CSS file: ${cssFile} - ${err instanceof Error ? err.message : String(err)}`)
+          }
+        }
+
+        // Validate we have HTML and CSS
+        if (!finalHtml) {
+          return errorResponse('html.create requires either "html" or "htmlFile" parameter')
+        }
+        if (!finalCss) {
+          return errorResponse('html.create requires either "css" or "cssFile" parameter')
+        }
+
+        // Call API with resolved content
+        const result = await client.callApi('html.create', {
+          ...restArgs,
+          html: finalHtml,
+          css: finalCss
+        })
+        const toolElapsed = performance.now() - toolStart
+        log(`[TIMING] Tool ${name} (file-based) completed in ${toolElapsed.toFixed(0)}ms`)
+        return successResponse(result)
+      }
+
       // For all other tools, relay to Circuitry API
       // The EServer bridge passes args as an object to the Circuitry API
       // API methods support both direct args: nodes.get("id") and object args: nodes.get({ nodeId: "id" })
       const result = await client.callApi(name, args as Record<string, unknown>)
+      const toolElapsed = performance.now() - toolStart
+      log(`[TIMING] Tool ${name} completed in ${toolElapsed.toFixed(0)}ms`)
       return successResponse(result)
 
     } catch (error) {
+      const toolElapsed = performance.now() - toolStart
       const errorMessage = error instanceof Error ? error.message : String(error)
       log(`Tool error: ${errorMessage}`)
+      log(`[TIMING] Tool ${name} failed in ${toolElapsed.toFixed(0)}ms`)
       return errorResponse(errorMessage)
     }
   })
