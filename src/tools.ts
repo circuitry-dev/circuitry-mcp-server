@@ -3,6 +3,34 @@
  *
  * Minimal tools for Claude Code CLI to interact with Circuitry.
  * Complex tasks delegate to Circuitry's chat agent.
+ *
+ * ============================================================================
+ * PARITY NOTE - KEEP IN SYNC WITH CIRCUITRY CHAT EDITOR
+ * ============================================================================
+ *
+ * This file defines tools for the MCP SERVER (Claude CLI remote control).
+ * The Chat Editor (in-browser) has its own tool definitions in:
+ *   circuitry/src/lib/circuitry-api/tool-definitions.ts
+ *
+ * BOTH must stay in sync! When you modify tools here, also update:
+ *   1. Chat editor tool definitions (tool-definitions.ts)
+ *   2. circuitryAPI implementation (circuitry-api/index.ts)
+ *
+ * Key differences:
+ *   - MCP Server: Receives tool calls from Claude CLI, forwards to EServer
+ *   - Chat Editor: Calls window.circuitryAPI directly in browser
+ *
+ * Tools that need parity:
+ *   - workflow.resolveFlow (flow context resolution with content search)
+ *     - Must include selectedNodeId parameter
+ *     - Uses same flow resolver for keyword/content matching
+ *   - code.setCode (with showDiff option for diff UI)
+ *     - Must include options: { showDiff, targetName, source }
+ *   - All node/edge manipulation tools
+ *
+ * The flow resolver logic lives in: circuitry/src/lib/flow-resolver.ts
+ * Both Chat and MCP use this same resolver for consistent behavior.
+ * ============================================================================
  */
 
 import { z } from 'zod'
@@ -58,13 +86,14 @@ const workflowTools: ToolDefinition[] = [
   {
     name: 'workflow.resolveFlow',
     namespace: 'workflow',
-    description: 'Resolve a user reference like "this flow" or "the diagram I drew" to specific nodes. Uses flow resolver to identify which flow/nodes user is referring to.',
+    description: 'Resolve which flow/nodes the user is referring to based on their message. Uses heuristics to match: selected node content, node names, code/text content keywords. Call this instead of fetching entire workflow for context.',
     parameters: [
-      { name: 'userMessage', type: 'string', description: 'The user message that references a flow', required: true }
+      { name: 'userMessage', type: 'string', description: 'The user message that references a flow', required: true },
+      { name: 'selectedNodeId', type: 'string', description: 'Currently selected node ID (if any) - greatly improves resolution accuracy', required: false }
     ],
     returns: {
       type: 'FlowResolutionResult',
-      description: '{ type, flowId, flowName, nodeIds, edgeIds, nodeNameMap, confidence, reasoning }'
+      description: '{ type: "existing_flow"|"session_nodes"|"selected_node"|"unrelated", flowId?, flowName?, nodeIds?, edgeIds?, nodeNameMap?, confidence, reasoning }'
     }
   },
   {
@@ -332,6 +361,49 @@ Use \`nodes\` for chain insertion: Source → A → B → C → Target`,
       type: '{ nodeIds, removedEdgeId, newEdgeIds, nodeId? }',
       description: 'Created node IDs, removed edge ID, and new edge IDs. nodeId included for single-node backward compatibility.'
     }
+  },
+  {
+    name: 'nodes.add',
+    namespace: 'nodes',
+    description: 'Add a new node to the workflow.',
+    parameters: [
+      { name: 'type', type: 'string', description: 'Node type to create (start, agent, code, datagrid, text, image, chart, condition, loop, then, trigger, action, sticky, flow, web, terminal, scene3d)', required: true },
+      { name: 'position', type: 'object', description: 'Position {x, y} on canvas', required: false },
+      { name: 'name', type: 'string', description: 'Display name for the node', required: false },
+      { name: 'config', type: 'object', description: 'Node-specific configuration', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of the created node' }
+  },
+  {
+    name: 'nodes.addConnected',
+    namespace: 'nodes',
+    description: 'Create a new node and connect it to an existing node.',
+    parameters: [
+      { name: 'sourceNodeId', type: 'string', description: 'ID of the node to connect from', required: true },
+      { name: 'direction', type: 'string', description: 'Direction to place new node', required: true, enum: ['below', 'right', 'above', 'left'] },
+      { name: 'type', type: 'string', description: 'Type of node to create', required: true },
+      { name: 'name', type: 'string', description: 'Display name for new node', required: false },
+      { name: 'config', type: 'object', description: 'Node configuration', required: false }
+    ],
+    returns: { type: '{ nodeId: string, edgeId: string }', description: 'IDs of created node and edge' }
+  },
+  {
+    name: 'nodes.getByName',
+    namespace: 'nodes',
+    description: 'Find a node by its display name.',
+    parameters: [
+      { name: 'name', type: 'string', description: 'The display name of the node', required: true }
+    ],
+    returns: { type: 'NodeInfo | null', description: 'Node info or null if not found' }
+  },
+  {
+    name: 'nodes.getByType',
+    namespace: 'nodes',
+    description: 'Get all nodes of a specific type. Types: start, agent, code, datagrid (Sheet), text, image, chart, condition, loop, then, trigger, action, sticky, flow, web, terminal, scene3d',
+    parameters: [
+      { name: 'type', type: 'string', description: 'Node type (e.g., "datagrid" for Sheet, "code", "agent")', required: true }
+    ],
+    returns: { type: 'NodeInfo[]', description: 'Array of matching nodes' }
   }
 ]
 
@@ -340,6 +412,35 @@ Use \`nodes\` for chain insertion: Source → A → B → C → Target`,
 // ============================================================================
 
 const edgeTools: ToolDefinition[] = [
+  {
+    name: 'edges.list',
+    namespace: 'edges',
+    description: 'List all edges in the current workflow.',
+    parameters: [],
+    returns: { type: 'EdgeInfo[]', description: 'Array of all edges with id, source, target' }
+  },
+  {
+    name: 'edges.connect',
+    namespace: 'edges',
+    description: 'Connect two nodes with an edge.',
+    parameters: [
+      { name: 'sourceId', type: 'string', description: 'Source node ID', required: true },
+      { name: 'targetId', type: 'string', description: 'Target node ID', required: true },
+      { name: 'sourceHandle', type: 'string', description: 'Source handle (left, right, top, bottom)', required: false },
+      { name: 'targetHandle', type: 'string', description: 'Target handle (left, right, top, bottom)', required: false },
+      { name: 'label', type: 'string', description: 'Edge label', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of created edge' }
+  },
+  {
+    name: 'edges.delete',
+    namespace: 'edges',
+    description: 'Delete an edge by ID.',
+    parameters: [
+      { name: 'edgeId', type: 'string', description: 'Edge ID to delete', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if deleted' }
+  },
   {
     name: 'edges.deleteBetween',
     namespace: 'edges',
@@ -419,12 +520,17 @@ Example: offset=100, limit=50 returns lines 100-149.`,
   {
     name: 'code.setCode',
     namespace: 'code',
-    description: 'Update code content in a code node. If node is EServer-sourced, will sync to source file.',
+    description: `Update code content in a code node. Use showDiff: true to show inline diff UI for user to review/accept changes. If node is EServer-sourced, will sync to source file.
+
+CRITICAL: Use this for "remove/add/change the X function" requests - EDIT the code content, don't delete the node!
+- "remove the power function" → Get code with code.getCode, then update with code.setCode (function removed)
+- "delete the node" → Use nodes.delete instead (removes entire node)`,
     parameters: [
       { name: 'nodeId', type: 'string', description: 'Code node ID', required: true },
-      { name: 'code', type: 'string', description: 'Source code to set', required: true }
+      { name: 'code', type: 'string', description: 'Source code to set', required: true },
+      { name: 'options', type: 'object', description: 'Options: { showDiff?: boolean (show diff UI), targetName?: string (display name), source?: string }', required: false }
     ],
-    returns: { type: 'boolean', description: 'True if successful' }
+    returns: { type: 'boolean | string', description: 'True if successful, or diff session ID if showDiff is true' }
   },
   {
     name: 'code.setLines',
@@ -840,42 +946,19 @@ This is the preferred way to add nodes when CodeBook is open. For workflow canva
 ]
 
 // ============================================================================
-// Agent Delegation Tools (complex tasks go to Circuitry's chat agent)
+// Agent Delegation Tools - REMOVED
+// ============================================================================
+// These tools (agent.chat, agent.poll) were used to delegate complex tasks
+// to Circuitry's in-browser chat agent. With MCP/Agent Chat tool parity,
+// Claude can now use MCP tools directly (nodes.createFlowchart, etc.)
+// instead of delegating to the browser agent.
+//
+// Removed: 2026-01-18
 // ============================================================================
 
 const agentTools: ToolDefinition[] = [
-  {
-    name: 'agent.chat',
-    namespace: 'agent',
-    description: 'Send a message to Circuitry\'s chat agent. Opens chat panel in agent+mcp mode. Agent creates flowcharts, handles complex visual tasks. Returns a chatId for polling.',
-    parameters: [
-      { name: 'message', type: 'string', description: 'Message to send to the agent', required: true },
-      { name: 'context', type: 'object', description: 'Optional context (selected nodes, etc)', required: false }
-    ],
-    returns: { type: '{ chatId, status }', description: 'Chat ID for polling and initial status' }
-  },
-  // {
-  //   name: 'agent.createFlowchart',
-  //   namespace: 'agent',
-  //   description: 'Ask agent to create flowchart from natural language. Use nodes.createFlowchart for direct control.',
-  //   parameters: [
-  //     { name: 'description', type: 'string', description: 'Natural language description of the flowchart to create', required: true },
-  //     { name: 'style', type: 'string', description: 'Style preference', required: false, enum: ['simple', 'detailed', 'technical'] }
-  //   ],
-  //   returns: { type: '{ chatId, status }', description: 'Chat ID for polling' }
-  // },
-  {
-    name: 'agent.poll',
-    namespace: 'agent',
-    description: 'Poll for agent response. Call this after agent.chat.',
-    parameters: [
-      { name: 'chatId', type: 'string', description: 'Chat ID from agent.chat', required: true }
-    ],
-    returns: {
-      type: '{ status, response?, createdNodes?, error? }',
-      description: 'Status: pending, completed, error. Response included when completed.'
-    }
-  }
+  // REMOVED - No longer needed with MCP/Agent Chat parity
+  // Use nodes.createFlowchart, workflow.resolveFlow, etc. directly
 ]
 
 // ============================================================================
@@ -916,46 +999,26 @@ const htmlTools: ToolDefinition[] = [
   {
     name: 'html.create',
     namespace: 'html',
-    description: `Create HTML content in Circuitry. In WORKFLOW context, there are TWO options - ASK THE USER which they prefer (first time or when unclear):
+    description: `Create HTML content in Circuitry.
 
-**target: "drawing"** (Drawing Layer) - Default
-- Quick visual prototypes, annotations, mockups
-- Renders on the canvas drawing layer
-- Use HTML Pointer tool to interact with form elements
-- Good for: rapid iteration, mixing with drawings/strokes
+**DESIGNER MODE: Use \`layout.createSection\` instead!**
+For Designer screens, ALWAYS use \`layout.createSection\` to create HTML with proper layout structure. It creates both a layout container AND HTML component together, ensuring correct stacking and preview export.
 
-**target: "node"** (Web Node) - Creates a workflow node
-- Data-driven content with inputs from other nodes
-- Has AI wizard for iterative refinement
-- Can execute JavaScript on workflow run
-- Good for: dynamic content, workflow integration
+Only use \`html.create\` directly in Designer for adding content to existing layout grid cells.
 
-In DESIGNER or NOTEPAD context: Only drawing layer is available (ignore target parameter).
+**WORKFLOW context** - TWO options (ASK USER if unclear):
+- **target: "drawing"** - Quick prototypes on canvas drawing layer (default)
+- **target: "node"** - Web Node with inputs from other nodes
 
-**DESIGNER MODE:** Use screenId to specify which screen/artboard to add the component to. If not specified, uses the currently selected screen. Position is relative to the screen's top-left corner (0,0).
+**CRITICAL CSS STRUCTURE - Prevents zoom scaling bugs:**
+NEVER put visual styles (background, border-radius, padding, box-shadow) on :host - causes border-radius to scale incorrectly when zooming. Use \`:host { display: block; }\` only, and put all visual styles on an inner container element.
 
-Position is auto-calculated if not provided (avoids overlapping existing elements).
+**MOBILE UI SIZING:**
+- Headers: 64px height
+- Bottom nav: 84px height
+- iPhone 15: 393x852
 
-**MOBILE UI SIZING GUIDELINES:**
-- Status bar: 44px height (iOS standard)
-- Headers/nav bars: **64px height** (not 56px - allows proper padding)
-- Bottom nav: 84px height (includes safe area)
-- Use CSS: \`box-sizing: border-box; height: 100%;\` to fill container properly
-- Use \`line-height: 1;\` on text to prevent extra spacing
-- Use \`padding: 0;\` on buttons to prevent unexpected sizing
-- iPhone 15: 393x852 total screen size
-
-**COLOR CONTRAST:** Ensure sufficient contrast between text and background.
-- **AVOID**: light text on light backgrounds, dark text on dark backgrounds
-- Gradient backgrounds: text must contrast with ALL parts of the gradient
-- When unsure, test readability - if hard to read, increase contrast
-
-**LAYOUT OPTIMIZATION (IMPORTANT):**
-After creating all components on a screen, call \`layout.analyze\` with autoFix to detect and fix issues automatically:
-1. Create all screen components
-2. Call \`layout.analyze({ screenId: "ScreenName", autoFix: true })\`
-3. Check \`appliedFixes\` in response to see what changed (updates your mental model)
-4. Use \`screen.capture\` to visually verify the layout looks correct`,
+**After editing components:** Use \`layout.analyze\` with autoFix to detect and fix layout issues.`,
     parameters: [
       { name: 'name', type: 'string', description: 'Display name (e.g., "Login Form", "Nav Menu")', required: true },
       { name: 'html', type: 'string', description: 'Full HTML structure (use this OR htmlFile, not both)', required: false },
@@ -1077,6 +1140,26 @@ Returns null if not in Designer mode. Use this before calling screen.* or layout
       { name: 'mode', type: 'string', description: 'Mode to set: design, layout, html, or preview', required: true, enum: ['design', 'layout', 'html', 'preview'] }
     ],
     returns: { type: 'boolean', description: 'True if mode was set successfully' }
+  },
+  {
+    name: 'designer.getDesignContext',
+    namespace: 'designer',
+    description: `Get design context (fonts, colors, patterns, buttons) extracted from all screens.
+
+Use this to understand the user's design style before generating HTML components.
+The returned context includes:
+- **fonts**: Font families, sizes, and weights used in text elements
+- **colorPalette**: Colors categorized by usage (primary/accent, backgrounds, text)
+- **buttons**: Detected button styles (background, text color, border radius)
+- **patterns**: Common corner radii, whether shadows/gradients are used
+- **theme**: Overall theme (light/dark/neutral) based on backgrounds
+
+**TIP**: When generating HTML with html.create, use this context to match colors, fonts, and button styles to the existing design.`,
+    parameters: [],
+    returns: {
+      type: '{ backgroundColor, colors, theme, fonts?, colorPalette?, buttons?, patterns? } | null',
+      description: 'Design context object or null if not in Designer'
+    }
   }
 ]
 
@@ -1329,10 +1412,51 @@ Semantic elements auto-position: header at top, footer at bottom.`,
   {
     name: 'layout.createSection',
     namespace: 'layout',
-    description: `Create a section with both a layout container AND an HTML component inside it.
-This ensures proper structure where the layout defines the container bounds and the HTML component fills it with content.
+    description: `**PREFERRED METHOD for creating HTML in Designer mode.**
 
-**Use this instead of separate layout.create + html.create calls** to get proper parent-child structure that shows correctly in layout view.
+Creates both a layout container AND an HTML component inside it together. This ensures:
+- Proper parent-child structure
+- Correct vertical stacking (content sections stack below each other)
+- Clean preview/export with proper positioning
+
+Use container param for auto-positioning:
+- "header" - positions at top
+- "footer" - positions at bottom
+- "content" - stacks below previous content sections
+
+**CRITICAL CSS STRUCTURE - Prevents zoom scaling bugs:**
+
+NEVER put visual styles on :host - causes border-radius to scale incorrectly when zooming.
+
+**WRONG:**
+\`\`\`css
+:host {
+  background: #1a1a3e;
+  border-radius: 16px;
+  padding: 20px;
+}
+\`\`\`
+
+**CORRECT:**
+\`\`\`css
+:host { display: block; }
+.card {
+  background: #1a1a3e;
+  border-radius: 16px;
+  padding: 20px;
+}
+\`\`\`
+
+Always wrap HTML content in a container div and apply all visual styles (background, border-radius, padding, box-shadow) to that inner element, NOT to :host.
+
+**Headers & Footers MUST have opaque backgrounds** - content scrolls behind them:
+- Use solid color: \`background: #1a1a3e;\`
+- Or gradient: \`background: linear-gradient(...);\`
+- Or blur: \`background: rgba(26,26,62,0.9); backdrop-filter: blur(10px);\`
+
+**Cards narrower than screen should be centered:**
+- Use \`margin: 16px auto;\` in CSS to center horizontally
+- Or set position.x to center: \`(screenWidth - cardWidth) / 2\`
 
 Returns both layoutId and htmlId so you can reference either element later.`,
     parameters: [
@@ -1352,37 +1476,368 @@ Returns both layoutId and htmlId so you can reference either element later.`,
   {
     name: 'layout.analyze',
     namespace: 'layout',
-    description: `Analyze screen layout for issues like overlapping elements, clipping, or content extending beyond screen bounds.
+    description: `Analyze and fix layout issues after editing components.
 
-**IMPORTANT: Call this after creating screens/components to detect and fix layout problems.**
+**Use for:** Fixing overlaps, repositioning elements, adjusting sizes after edits.
+**Don't use for:** Initial creation - use \`layout.createSection\` which handles positioning automatically.
 
-**Use autoFix: true to automatically apply fixes** - the response includes \`appliedFixes\` showing what changed so you know the client state is updated.
+**Use autoFix: true** to automatically apply fixes.
 
-Returns:
-- hasIssues: Whether any problems were detected
-- issues: List of problems (overflow, overlap, clipped, footer-misplaced, header-misplaced, content-overflow)
-- suggestedScreenHeight: If content overflows, the recommended new height
-- fixes: Suggested fixes (empty if autoFix applied them)
-- appliedFixes: (when autoFix: true) Array of { fix, success, error? } showing what was changed
-
-Common issues detected:
-- Content extends beyond screen height (suggests increasing screen height)
-- Elements overlap each other
-- Footer not positioned at bottom of screen
-- Header not positioned at top of screen
+Issues detected:
+- Overlapping elements
+- Footer/header misplacement
+- Content overflow beyond screen
 - Elements clipped by screen edges
-- **Internal content overflow** - HTML content inside a component is larger than its container (e.g., button bleeding out, text touching edges)
 
-**Workflow for creating layouts:**
-1. Create screens with screen.create
-2. Add layouts/components with layout.create, html.create
-3. Call layout.analyze with autoFix: true to detect and fix issues automatically
-4. Use screen.capture to visually verify the layout`,
+**Workflow:**
+1. Create with \`layout.createSection\` (handles positioning)
+2. After edits, use \`layout.analyze({ autoFix: true })\` to fix issues
+3. Use \`screen.capture\` to verify`,
     parameters: [
       { name: 'screenId', type: 'string', description: 'Screen ID or name to analyze (uses selected screen if not specified)', required: false },
       { name: 'autoFix', type: 'boolean', description: 'When true, automatically apply suggested fixes and return appliedFixes showing what changed', required: false }
     ],
     returns: { type: 'object', description: 'Analysis result with issues, fixes applied (if autoFix), and component positions' }
+  }
+]
+
+// ============================================================================
+// Document Context Tools (multi-document awareness)
+// ============================================================================
+
+const documentTools: ToolDefinition[] = [
+  {
+    name: 'documents.list',
+    namespace: 'documents',
+    description: 'Get all open documents with their metadata. Useful for discovering what documents are available and which pane they are in (left, right, bottom-left, bottom-right).',
+    parameters: [],
+    returns: { type: 'DocumentInfo[]', description: 'Array of document info objects with id, type, name, isDirty, isActive, pane' }
+  },
+  {
+    name: 'documents.getRecent',
+    namespace: 'documents',
+    description: 'Get recently focused documents ordered by most recent first. Excludes chat, browser, and terminal documents. Shows which documents the user was last working on - use this to determine which document the user is referring to.',
+    parameters: [
+      { name: 'limit', type: 'number', description: 'Maximum number of documents to return (default 10)', required: false }
+    ],
+    returns: { type: 'DocumentInfo[]', description: 'Array of recent document info' }
+  },
+  {
+    name: 'documents.getTarget',
+    namespace: 'documents',
+    description: 'Get the current target document for operations. Returns the explicitly set target, or falls back to the most recently focused primary document (workflow, designer, notepad, spreadsheet).',
+    parameters: [],
+    returns: { type: 'DocumentInfo | null', description: 'Target document info or null' }
+  },
+  {
+    name: 'documents.setTarget',
+    namespace: 'documents',
+    description: 'Set an explicit target document for subsequent operations. Useful when working with multiple documents to ensure operations go to the correct one.',
+    parameters: [
+      { name: 'docId', type: 'string', description: 'Document ID to target', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if document was found and set as target' }
+  },
+  {
+    name: 'documents.clearTarget',
+    namespace: 'documents',
+    description: 'Clear the explicit target document, falling back to most recently focused primary document.',
+    parameters: [],
+    returns: { type: 'void', description: 'No return value' }
+  },
+  {
+    name: 'documents.getByType',
+    namespace: 'documents',
+    description: 'Get all documents of a specific type (e.g., "workflow", "spreadsheet", "designer", "notepad").',
+    parameters: [
+      { name: 'type', type: 'string', description: 'Document type to filter by', required: true }
+    ],
+    returns: { type: 'DocumentInfo[]', description: 'Array of matching documents' }
+  },
+  {
+    name: 'documents.formatContext',
+    namespace: 'documents',
+    description: 'Get a formatted string listing open documents for system prompts. Shows document names, types, panes, and the current target. Use this to understand the multi-document context.',
+    parameters: [],
+    returns: { type: 'string', description: 'Human-readable document context' }
+  }
+]
+
+// ============================================================================
+// Standalone Spreadsheet Tools (separate from workflow sheet nodes)
+// ============================================================================
+
+const spreadsheetTools: ToolDefinition[] = [
+  {
+    name: 'spreadsheet.getActiveDocument',
+    namespace: 'spreadsheet',
+    description: 'Get info about the active standalone spreadsheet document. Returns null if no spreadsheet is focused. Use this to check if user is working on a spreadsheet.',
+    parameters: [],
+    returns: { type: 'SpreadsheetDocumentInfo | null', description: 'Active spreadsheet info or null' }
+  },
+  {
+    name: 'spreadsheet.create',
+    namespace: 'spreadsheet',
+    description: 'Create a new standalone spreadsheet document with optional initial data.',
+    parameters: [
+      { name: 'name', type: 'string', description: 'Document name', required: false },
+      { name: 'initialData', type: 'array', description: 'Initial 2D array data for first sheet', required: false },
+      { name: 'initialSheetName', type: 'string', description: 'Name for first sheet', required: false }
+    ],
+    returns: { type: '{ documentId: string; success: boolean }', description: 'Created document info' }
+  },
+  {
+    name: 'spreadsheet.listSheets',
+    namespace: 'spreadsheet',
+    description: 'List all sheets in a standalone spreadsheet document. Shows sheet names, row counts, and column counts.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active if not provided)', required: false }
+    ],
+    returns: { type: 'SpreadsheetSheetInfo[]', description: 'Array of sheet info' }
+  },
+  {
+    name: 'spreadsheet.switchSheet',
+    namespace: 'spreadsheet',
+    description: 'Switch to a different sheet within a spreadsheet by index or name.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'indexOrName', type: 'any', description: 'Sheet index (0-based) or sheet name', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if switch succeeded' }
+  },
+  {
+    name: 'spreadsheet.addSheet',
+    namespace: 'spreadsheet',
+    description: 'Add a new sheet to a standalone spreadsheet.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'name', type: 'string', description: 'Sheet name (auto-generated if not provided)', required: false }
+    ],
+    returns: { type: '{ index: number; name: string } | null', description: 'New sheet info or null' }
+  },
+  {
+    name: 'spreadsheet.deleteSheet',
+    namespace: 'spreadsheet',
+    description: 'Delete a sheet from a standalone spreadsheet. Cannot delete the last sheet.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'index', type: 'number', description: 'Sheet index to delete', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if deletion succeeded' }
+  },
+  {
+    name: 'spreadsheet.renameSheet',
+    namespace: 'spreadsheet',
+    description: 'Rename a sheet in a standalone spreadsheet.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'index', type: 'number', description: 'Sheet index to rename', required: true },
+      { name: 'newName', type: 'string', description: 'New name for the sheet', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if rename succeeded' }
+  },
+  {
+    name: 'spreadsheet.getData',
+    namespace: 'spreadsheet',
+    description: 'Get data from a sheet in a standalone spreadsheet as a 2D array.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'sheetIndex', type: 'number', description: 'Sheet index (optional - uses active sheet)', required: false }
+    ],
+    returns: { type: 'any[][]', description: '2D array of cell values' }
+  },
+  {
+    name: 'spreadsheet.setData',
+    namespace: 'spreadsheet',
+    description: 'Set data in a sheet of a standalone spreadsheet.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'data', type: 'array', description: '2D array of data to set', required: true },
+      { name: 'sheetIndex', type: 'number', description: 'Sheet index (optional - uses active sheet)', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'spreadsheet.getCell',
+    namespace: 'spreadsheet',
+    description: 'Get a single cell value from a standalone spreadsheet.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'row', type: 'number', description: 'Row index (0-based)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-based)', required: true },
+      { name: 'sheetIndex', type: 'number', description: 'Sheet index (optional - uses active sheet)', required: false }
+    ],
+    returns: { type: 'any', description: 'Cell value' }
+  },
+  {
+    name: 'spreadsheet.setCell',
+    namespace: 'spreadsheet',
+    description: 'Set a single cell value in a standalone spreadsheet. Use = prefix for formulas (e.g., "=SUM(A1:A10)").',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'row', type: 'number', description: 'Row index (0-based)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-based)', required: true },
+      { name: 'value', type: 'any', description: 'Value to set (use = prefix for formulas)', required: true },
+      { name: 'sheetIndex', type: 'number', description: 'Sheet index (optional - uses active sheet)', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'spreadsheet.getCellFormula',
+    namespace: 'spreadsheet',
+    description: 'Get the formula from a cell in a standalone spreadsheet. Returns null if cell has no formula.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'row', type: 'number', description: 'Row index (0-based)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-based)', required: true },
+      { name: 'sheetIndex', type: 'number', description: 'Sheet index (optional - uses active sheet)', required: false }
+    ],
+    returns: { type: 'string | null', description: 'Formula string or null' }
+  },
+  {
+    name: 'spreadsheet.setCellFormula',
+    namespace: 'spreadsheet',
+    description: 'Set a formula for a cell in a standalone spreadsheet.',
+    parameters: [
+      { name: 'documentId', type: 'string', description: 'Document ID (optional - uses active)', required: false },
+      { name: 'row', type: 'number', description: 'Row index (0-based)', required: true },
+      { name: 'col', type: 'number', description: 'Column index (0-based)', required: true },
+      { name: 'formula', type: 'string', description: 'Formula string (e.g., "=SUM(A1:A10)")', required: true },
+      { name: 'sheetIndex', type: 'number', description: 'Sheet index (optional - uses active sheet)', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  },
+  {
+    name: 'spreadsheet.listFunctions',
+    namespace: 'spreadsheet',
+    description: `List all available formula functions for spreadsheets. Returns 100+ Excel-compatible function names including:
+- Math: SUM, AVERAGE, MIN, MAX, ROUND, ABS, SQRT, etc.
+- Lookup: VLOOKUP, HLOOKUP, INDEX, MATCH, LOOKUP
+- Text: CONCAT, LEFT, RIGHT, MID, LEN, TRIM, UPPER, LOWER
+- Logic: IF, AND, OR, NOT, IFERROR, SWITCH
+- Date: TODAY, NOW, DATE, YEAR, MONTH, DAY
+- Stats: COUNT, COUNTA, COUNTIF, SUMIF, AVERAGEIF
+And many more.`,
+    parameters: [],
+    returns: { type: 'string[]', description: 'Array of function names' }
+  },
+  {
+    name: 'spreadsheet.listFunctionCategories',
+    namespace: 'spreadsheet',
+    description: 'List formula functions organized by category (Math, Logic, Text, Lookup, Date, etc.). Useful for discovering available functions.',
+    parameters: [],
+    returns: { type: 'Array<{ name: string; functions: string[] }>', description: 'Categories with functions' }
+  }
+]
+
+// ============================================================================
+// Chart Tools
+// ============================================================================
+
+const chartTools: ToolDefinition[] = [
+  {
+    name: 'chart.create',
+    namespace: 'chart',
+    description: 'Create a chart/visualization node.',
+    parameters: [
+      { name: 'name', type: 'string', description: 'Display name', required: false },
+      { name: 'chartType', type: 'string', description: 'Type of chart', required: false, enum: ['bar', 'line', 'pie', 'scatter', 'area'] },
+      { name: 'data', type: 'object', description: 'Chart data configuration', required: false },
+      { name: 'position', type: 'object', description: 'Position {x, y} on canvas', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of created chart node' }
+  },
+  {
+    name: 'chart.setConfig',
+    namespace: 'chart',
+    description: 'Update chart configuration.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Chart node ID', required: true },
+      { name: 'config', type: 'object', description: 'Chart configuration', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  }
+]
+
+// ============================================================================
+// Image Tools
+// ============================================================================
+
+const imageTools: ToolDefinition[] = [
+  {
+    name: 'image.create',
+    namespace: 'image',
+    description: 'Create an image node.',
+    parameters: [
+      { name: 'name', type: 'string', description: 'Display name', required: false },
+      { name: 'url', type: 'string', description: 'Image URL or base64 data URI', required: false },
+      { name: 'position', type: 'object', description: 'Position {x, y} on canvas', required: false }
+    ],
+    returns: { type: 'string', description: 'ID of created image node' }
+  },
+  {
+    name: 'image.setSource',
+    namespace: 'image',
+    description: 'Set image source URL or data.',
+    parameters: [
+      { name: 'nodeId', type: 'string', description: 'Image node ID', required: true },
+      { name: 'source', type: 'string', description: 'Image URL or base64 data URI', required: true }
+    ],
+    returns: { type: 'boolean', description: 'True if successful' }
+  }
+]
+
+// ============================================================================
+// Execution Tools
+// ============================================================================
+
+const executionTools: ToolDefinition[] = [
+  {
+    name: 'execution.start',
+    namespace: 'execution',
+    description: 'Start workflow execution from a specific node or the start node.',
+    parameters: [
+      { name: 'startNodeId', type: 'string', description: 'Node ID to start from (optional, defaults to Start node)', required: false },
+      { name: 'input', type: 'any', description: 'Initial input data', required: false }
+    ],
+    returns: { type: '{ executionId: string }', description: 'Execution session ID' }
+  },
+  {
+    name: 'execution.stop',
+    namespace: 'execution',
+    description: 'Stop the current workflow execution.',
+    parameters: [],
+    returns: { type: 'boolean', description: 'True if stopped' }
+  },
+  {
+    name: 'execution.getStatus',
+    namespace: 'execution',
+    description: 'Get current execution status.',
+    parameters: [],
+    returns: { type: '{ isRunning, currentNodeId, error }', description: 'Execution status' }
+  }
+]
+
+// ============================================================================
+// File Tools
+// ============================================================================
+
+const fileTools: ToolDefinition[] = [
+  {
+    name: 'file.save',
+    namespace: 'file',
+    description: 'Save the current workflow.',
+    parameters: [
+      { name: 'path', type: 'string', description: 'File path (optional for already-saved workflows)', required: false }
+    ],
+    returns: { type: 'boolean', description: 'True if saved' }
+  },
+  {
+    name: 'file.export',
+    namespace: 'file',
+    description: 'Export workflow to JSON.',
+    parameters: [],
+    returns: { type: 'string', description: 'JSON string of workflow' }
   }
 ]
 
@@ -1404,7 +1859,13 @@ export const allToolDefinitions: ToolDefinition[] = [
   ...htmlTools,
   ...designerTools,
   ...screenTools,
-  ...layoutTools
+  ...layoutTools,
+  ...documentTools,
+  ...spreadsheetTools,
+  ...chartTools,
+  ...imageTools,
+  ...executionTools,
+  ...fileTools
 ]
 
 // ============================================================================
