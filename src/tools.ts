@@ -244,11 +244,12 @@ Large sheets (>1000 rows) are skipped by default to avoid slowness. Use includeL
   {
     name: 'nodes.delete',
     namespace: 'nodes',
-    description: 'Delete a node from the workflow.',
+    description: 'Delete one or more nodes from the workflow. Use nodeId for single delete, nodeIds for bulk delete.',
     parameters: [
-      { name: 'nodeId', type: 'string', description: 'ID of the node to delete', required: true }
+      { name: 'nodeId', type: 'string', description: 'ID of a single node to delete', required: false },
+      { name: 'nodeIds', type: 'array', description: 'Array of node IDs to delete (for bulk delete)', required: false }
     ],
-    returns: { type: 'boolean', description: 'True if deletion succeeded' }
+    returns: { type: 'boolean | { deleted: number, failed: string[] }', description: 'True for single delete, or bulk result with counts' }
   },
   {
     name: 'nodes.createFlowchart',
