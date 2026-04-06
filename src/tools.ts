@@ -234,10 +234,10 @@ Large sheets (>1000 rows) are skipped by default to avoid slowness. Use includeL
   {
     name: 'nodes.update',
     namespace: 'nodes',
-    description: "Update a node's data/configuration.",
+    description: "Update a node's data/configuration. Examples: change color: {color: \"#10B981\"}, rename: {displayName: \"New Name\"}, change shape: {flowShape: \"diamond\"}.",
     parameters: [
       { name: 'nodeId', type: 'string', description: 'ID of the node to update', required: true },
-      { name: 'data', type: 'object', description: 'Data to merge into node', required: true }
+      { name: 'data', type: 'object', description: 'Data object to merge into node (e.g. {color: "#10B981", displayName: "Step"})', required: true }
     ],
     returns: { type: 'boolean', description: 'True if update succeeded' }
   },
