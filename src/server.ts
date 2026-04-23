@@ -12,7 +12,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { isConfigured, getAccessKey, getEServerUrl } from './config.js'
 import { getClient } from './eserver-client.js'
-import { allToolDefinitions } from './tools.js'
+import { allToolDefinitions, PROCEDURE_AUTHORING_GUIDE } from './tools.js'
 
 // Use console.error for logging since stdout is reserved for MCP JSON-RPC
 const log = (...args: unknown[]) => console.error('[circuitry-mcp]', ...args)
@@ -182,26 +182,18 @@ export async function startServer(): Promise<void> {
         }
       }
 
-      // Handle agent delegation tools
-      if (name === 'agent.chat') {
-        const { message, context } = args as { message: string; context?: Record<string, unknown> }
-        const result = await client.sendAgentChat(message, context)
-        return successResponse(result)
-      }
+      // Agent delegation tools REMOVED - 2026-01-18
+      // With MCP/Agent Chat tool parity, Claude uses MCP tools directly
+      // (nodes.createFlowchart, workflow.resolveFlow, etc.)
+      // instead of delegating to the browser agent.
 
-      if (name === 'agent.createFlowchart') {
-        const { description, style } = args as { description: string; style?: string }
-        const message = style
-          ? `Create a ${style} flowchart: ${description}`
-          : `Create a flowchart: ${description}`
-        const result = await client.sendAgentChat(message, { intent: 'flowchart', style })
-        return successResponse(result)
-      }
-
-      if (name === 'agent.poll') {
-        const { chatId } = args as { chatId: string }
-        const result = await client.pollAgentResponse(chatId)
-        return successResponse(result)
+      // Procedure authoring guide — returned inline so it works even when
+      // Circuitry isn't connected. Keep in sync with circuitry-api's
+      // PROCEDURE_AUTHORING_GUIDE and docs/procedures.md.
+      if (name === 'procedure.getAuthoringGuide') {
+        const { topic } = args as { topic?: 'overview' | 'agent-usage' | 'code-usage' | 'examples' }
+        const guide = PROCEDURE_AUTHORING_GUIDE[topic || 'overview'] || PROCEDURE_AUTHORING_GUIDE.overview
+        return successResponse({ guide })
       }
 
       // Handle workflow tools via Circuitry MCP API
@@ -223,8 +215,8 @@ export async function startServer(): Promise<void> {
       }
 
       if (name === 'workflow.resolveFlow') {
-        const { userMessage } = args as { userMessage: string }
-        const result = await client.callApi('mcp.resolveFlow', { userMessage })
+        const { userMessage, selectedNodeId } = args as { userMessage: string; selectedNodeId?: string }
+        const result = await client.callApi('mcp.resolveFlow', { userMessage, selectedNodeId })
         return successResponse(result)
       }
 
