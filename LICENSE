@@ -1,0 +1,71 @@
+Circuitry MCP Server — Software Licence
+Copyright (c) 2026 John Wylie, operating as Circuitry ("Circuitry"). All rights reserved.
+
+This software, the "@circuitry/mcp-server" package and its accompanying files (the
+"Software"), is proprietary software. It is provided to let you install and run a
+client that connects your AI tools to the Circuitry service. It is NOT open-source
+software, and publication of its source for transparency and interoperability does
+not place it in the public domain or grant any rights beyond those stated below.
+
+1. Licence grant
+   Subject to your compliance with this Licence and the Circuitry Terms of Service
+   (https://www.circuitry.dev/terms), Circuitry grants you a limited, non-exclusive,
+   non-transferable, non-sublicensable, revocable licence to download, install and
+   run the Software, in unmodified form, solely to connect to and use the Circuitry
+   service. This includes copying the Software only to the extent technically
+   necessary to install and run it (for example, as performed automatically by npm,
+   npx or your package manager).
+
+2. Reservation of rights
+   All rights not expressly granted are reserved by Circuitry. Except as this Licence
+   permits or applicable law allows notwithstanding this Licence, you must not:
+   (a) copy the Software other than as permitted in clause 1;
+   (b) modify, adapt, translate or create derivative works of the Software;
+   (c) distribute, publish, re-publish, sublicense, sell, rent, lease or otherwise
+       make the Software available to any third party;
+   (d) reverse engineer, decompile or disassemble the Software, except to the extent
+       this restriction is prohibited by applicable law;
+   (e) remove, obscure or alter any proprietary or licence notices;
+   (f) use the Software, or any data, schemas or interfaces derived from it, to build
+       or assist a product or service that competes with Circuitry, or to train,
+       fine-tune or distil any machine-learning or AI model for that purpose.
+
+3. Trade marks
+   This Licence grants no rights in the "Circuitry" name, logo or other brand
+   features, which remain the trade marks of Circuitry and may not be used without
+   prior written consent.
+
+4. Source availability
+   The Software's source may be made available for inspection (for example on a
+   public code repository) to support transparency and interoperability. Such
+   availability is provided for reference only and grants no rights beyond those in
+   clause 1; in particular it does not make the Software open-source or permit the
+   acts restricted by clause 2.
+
+5. Third-party components
+   The Software depends on separately licensed third-party open-source components.
+   Those components remain governed by their own licences, which are unaffected by
+   this Licence.
+
+6. Service terms
+   Your use of the Circuitry service through the Software is additionally governed by
+   the Circuitry Terms of Service (https://www.circuitry.dev/terms).
+
+7. Termination
+   This Licence terminates automatically if you breach it. On termination you must
+   stop using and remove all copies of the Software.
+
+8. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING WITHOUT LIMITATION THE WARRANTIES OF MERCHANTABILITY, FITNESS
+   FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+9. Limitation of liability
+   TO THE FULLEST EXTENT PERMITTED BY LAW, CIRCUITRY SHALL NOT BE LIABLE FOR ANY
+   CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+10. Governing law
+    This Licence is governed by the law of England and Wales.
+
+For permissions beyond the scope of this Licence, contact support@circuitry.dev.

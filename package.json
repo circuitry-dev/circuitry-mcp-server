@@ -1,6 +1,6 @@
 {
   "name": "@circuitry/mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Claude Code CLI to communicate with Circuitry",
   "type": "module",
   "main": "dist/index.js",
@@ -21,7 +21,7 @@
     "ai"
   ],
   "author": "Circuitry",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "ws": "^8.16.0",
@@ -37,6 +37,7 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "LICENSE"
   ]
 }

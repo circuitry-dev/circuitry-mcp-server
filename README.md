@@ -263,7 +263,15 @@ To test local changes, point your MCP config to the built output:
 
 ## License
 
-MIT
+This is **proprietary software**, provided so you can install and run it to connect your
+AI tools to the Circuitry service. The source is published for transparency and
+interoperability — it is **not** open-source, and viewing it grants no right to copy,
+modify, redistribute, or build a competing product. You may download, install and run it
+to use Circuitry; all other rights are reserved. See [LICENSE](./LICENSE) for the full
+terms. "Circuitry" and the Circuitry logo are trade marks of Circuitry.
+
+Use of the Circuitry service through this software is also governed by the
+[Circuitry Terms of Service](https://www.circuitry.dev/terms).
 
 ## Links
 
