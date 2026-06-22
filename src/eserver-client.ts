@@ -233,6 +233,10 @@ export class EServerClient {
   // ============================================================================
 
   /**
+   * @deprecated No longer used - agent.chat tool removed with MCP/Agent Chat parity.
+   * Claude now uses MCP tools directly (nodes.createFlowchart, etc.)
+   * Kept for potential future use or debugging.
+   *
    * Send a message to Circuitry's chat agent
    * Opens chat panel in agent+mcp mode.
    * Includes mcpSessionId for routing to the bound client.
@@ -268,6 +272,9 @@ export class EServerClient {
   }
 
   /**
+   * @deprecated No longer used - agent.poll tool removed with MCP/Agent Chat parity.
+   * Kept for potential future use or debugging.
+   *
    * Poll for agent response
    */
   async pollAgentResponse(chatId: string): Promise<AgentPollResult> {
