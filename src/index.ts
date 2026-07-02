@@ -8,6 +8,7 @@
 
 import { runSetup, showStatus } from './setup.js'
 import { startServer } from './server.js'
+import { getOwnVersion } from './tool-catalog.js'
 
 const HELP_TEXT = `
 Circuitry MCP Server
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
     case 'version':
     case '--version':
     case '-v':
-      console.log('1.0.0')
+      console.log(getOwnVersion())
       break
 
     default:

@@ -176,12 +176,45 @@ Done! Created a flowchart with 7 nodes showing:
 | `sheet.create` | Create a spreadsheet node with data |
 | `sheet.setData` | Replace sheet data |
 
-### Agent Delegation
-| Tool | Description |
-|------|-------------|
-| `agent.chat` | Send message to Circuitry's chat agent |
-| `agent.createFlowchart` | Ask agent to create a flowchart |
-| `agent.poll` | Poll for agent response (async) |
+> The tables above are a hand-picked highlight. The **full** tool catalog is
+> fetched live from the connected Circuitry app (see below), so it grows with the
+> app — there may be many more tools available than are listed here.
+
+## How tools stay in sync (dynamic discovery)
+
+This package does **not** hard-code the tool catalog. On a successful
+`circuitry.connect`, the server fetches the app's live tool definitions over the
+existing relay (`tools.getDefinitions`) and advertises them to your AI client —
+so **when Circuitry adds a tool, you get it without updating this package.**
+
+Resolution order for the active tool list:
+
+1. **Live fetch** from the connected app (freshest).
+2. **Disk cache** of the last successful fetch (`~/.circuitry-mcp/tools-cache.json`) — used when offline.
+3. **Bundled snapshot** (`tools-snapshot.json`, shipped in the npm tarball) — first-run fallback.
+
+The `circuitry.*` connection tools are always available regardless of source.
+
+If the app reports it needs a newer server than you have (version handshake), the
+server keeps working with whatever it can parse and surfaces an update-required
+notice on `circuitry.connect` / `circuitry.status`:
+
+```
+npm i -g @circuitry/mcp-server@latest   # or just use `npx @circuitry/mcp-server`
+```
+
+The bundled snapshot is regenerated at publish time from the app's source of
+truth (`circuitry/src/lib/circuitry-api/tool-definitions.ts`) via
+`npm run mcp:generate` in the app repo. There is no manual parity step to run.
+
+> Dynamic discovery landed in **2.1.0** — see [CHANGELOG.md](./CHANGELOG.md).
+
+### Safety note — external write tools
+
+Tools invoked through this MCP server run against the app **without** the chat's
+plan-approval UI that gates the in-app agent. The mitigations are:
+(1) the connection itself is **user-approved** via the permission dialog raised
+by `circuitry.connect`, and (2) most edits are revertible via `workflow.undo`.
 
 ## Configuration
 

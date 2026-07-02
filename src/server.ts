@@ -12,7 +12,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { isConfigured, getAccessKey, getEServerUrl } from './config.js'
 import { getClient } from './eserver-client.js'
-import { allToolDefinitions, PROCEDURE_AUTHORING_GUIDE } from './tools.js'
+import { PROCEDURE_AUTHORING_GUIDE } from './tools.js'
+import { getActiveTools, refreshFromApp, getUpdateRequired, getOwnVersion } from './tool-catalog.js'
 
 // Use console.error for logging since stdout is reserved for MCP JSON-RPC
 const log = (...args: unknown[]) => console.error('[circuitry-mcp]', ...args)
@@ -35,11 +36,13 @@ export async function startServer(): Promise<void> {
   const server = new Server(
     {
       name: 'circuitry-mcp-server',
-      version: '2.0.0'
+      version: getOwnVersion()
     },
     {
       capabilities: {
-        tools: {}
+        // listChanged: we re-fetch the live tool catalog on connect and notify
+        // the client if it differs from the bundled snapshot (dynamic discovery).
+        tools: { listChanged: true }
       }
     }
   )
@@ -47,11 +50,31 @@ export async function startServer(): Promise<void> {
   // Get EServer client
   const client = getClient()
 
+  // Re-fetch the live tool catalog from the app and notify the client if it
+  // changed. Never throws (refreshFromApp swallows failures). Returns the
+  // update-required notice, if any, to append to connect/status output.
+  const refreshCatalog = async (): Promise<string | null> => {
+    const { updated, updateRequired } = await refreshFromApp(
+      (method, args) => client.callApi(method, args)
+    )
+    if (updated) {
+      try {
+        await server.sendToolListChanged()
+      } catch (err) {
+        log('sendToolListChanged failed (non-fatal):', err instanceof Error ? err.message : String(err))
+      }
+    }
+    return updateRequired
+  }
+
+  const appendNotice = (message: string, notice: string | null): string =>
+    notice ? `${message}\n\n${notice}` : message
+
   // Handle list_tools request
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     log('Received list_tools request')
 
-    const tools = allToolDefinitions.map(tool => {
+    const tools = getActiveTools().map(tool => {
       const properties: Record<string, unknown> = {}
       const required: string[] = []
 
@@ -132,18 +155,21 @@ export async function startServer(): Promise<void> {
       // Handle circuitry.status - always allowed
       if (name === 'circuitry.status') {
         const status = await client.getStatus()
+        const updateRequired = getUpdateRequired()
         return successResponse({
           ...status,
-          approved: connectionApproved
+          approved: connectionApproved,
+          ...(updateRequired ? { updateRequired } : {})
         })
       }
 
       // Handle circuitry.connect - request permission
       if (name === 'circuitry.connect') {
         if (connectionApproved) {
+          const updateRequired = await refreshCatalog()
           return successResponse({
             approved: true,
-            message: 'Already connected and approved'
+            message: appendNotice('Already connected and approved', updateRequired)
           })
         }
 
@@ -151,11 +177,18 @@ export async function startServer(): Promise<void> {
         const result = await client.requestConnection()
         connectionApproved = result.approved
 
+        // On approval, pull the live tool catalog so newly-added app tools show
+        // up without an MCP release, and notify the client of the change.
+        const updateRequired = result.approved ? await refreshCatalog() : null
+
         return successResponse({
           approved: result.approved,
-          message: result.approved
-            ? 'Connection approved. Chat panel opened in agent+mcp mode.'
-            : 'Connection denied by user.'
+          message: appendNotice(
+            result.approved
+              ? 'Connection approved. Chat panel opened in agent+mcp mode.'
+              : 'Connection denied by user.',
+            updateRequired
+          )
         })
       }
 
@@ -175,6 +208,8 @@ export async function startServer(): Promise<void> {
         const status = await client.getConnectionStatus()
         if (status.approved) {
           connectionApproved = true
+          // Reconnect path — refresh the catalog too so it tracks the app.
+          await refreshCatalog()
         } else {
           return errorResponse(
             'Connection not approved.\n\nCall circuitry.connect first to request permission from the user.'
@@ -305,69 +340,6 @@ export async function startServer(): Promise<void> {
         return successResponse(result)
       }
 
-      // Handle drawing.getImage - return image in a format Claude can see
-      if (name === 'drawing.getImage') {
-        const result = await client.callApi(name, args as Record<string, unknown>) as {
-          imageData?: string
-          width?: number
-          height?: number
-          strokeCount?: number
-        }
-
-        if (result.imageData && result.imageData.startsWith('data:image/png;base64,')) {
-          // Extract base64 data without the data URL prefix
-          const base64Data = result.imageData.replace('data:image/png;base64,', '')
-          return {
-            content: [
-              {
-                type: 'image' as const,
-                data: base64Data,
-                mimeType: 'image/png'
-              },
-              {
-                type: 'text' as const,
-                text: `Drawing captured: ${result.strokeCount} strokes, ${Math.round(result.width || 0)}x${Math.round(result.height || 0)}px`
-              }
-            ]
-          }
-        }
-
-        // No drawing data
-        return successResponse({ message: 'No drawing found on canvas', strokeCount: 0 })
-      }
-
-      // Handle screen.capture - return screen image in a format Claude can see
-      if (name === 'screen.capture') {
-        const result = await client.callApi(name, args as Record<string, unknown>) as {
-          imageData?: string
-          width?: number
-          height?: number
-          screenId?: string
-          screenName?: string
-        } | null
-
-        if (result?.imageData && result.imageData.startsWith('data:image/png;base64,')) {
-          // Extract base64 data without the data URL prefix
-          const base64Data = result.imageData.replace('data:image/png;base64,', '')
-          return {
-            content: [
-              {
-                type: 'image' as const,
-                data: base64Data,
-                mimeType: 'image/png'
-              },
-              {
-                type: 'text' as const,
-                text: `Screen captured: "${result.screenName}" (${result.screenId}), ${result.width}x${result.height}px`
-              }
-            ]
-          }
-        }
-
-        // No screen captured
-        return successResponse({ message: 'Failed to capture screen. Make sure you are in Designer mode with a screen visible.', screenId: null })
-      }
-
       // Handle html.create with file-based params
       if (name === 'html.create') {
         const { htmlFile, cssFile, html, css, ...restArgs } = args as {
@@ -428,6 +400,13 @@ export async function startServer(): Promise<void> {
       const result = await client.callApi(name, args as Record<string, unknown>)
       const toolElapsed = performance.now() - toolStart
       log(`[TIMING] Tool ${name} completed in ${toolElapsed.toFixed(0)}ms`)
+
+      // Generic image passthrough: any tool result carrying a data:image/* URI
+      // (drawing.getImage, screen.capture, doc.screenshot, …) is returned as a
+      // viewable MCP image so vision models can see it.
+      const imageContent = toImageContent(result)
+      if (imageContent) return imageContent
+
       return successResponse(result)
 
     } catch (error) {
@@ -459,6 +438,32 @@ export async function startServer(): Promise<void> {
     client.disconnectWebSocket()
     process.exit(0)
   })
+}
+
+/**
+ * If a tool result carries a `data:image/*;base64,` URI in `imageData`, return
+ * it as a viewable MCP image (plus a text sidecar with the rest of the result).
+ * Returns null when there's no such image, so the caller falls through to the
+ * normal JSON text response.
+ */
+function toImageContent(result: unknown) {
+  if (!result || typeof result !== 'object') return null
+  const imageData = (result as { imageData?: unknown }).imageData
+  if (typeof imageData !== 'string' || !imageData.startsWith('data:image/')) return null
+
+  const match = imageData.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/s)
+  if (!match) return null
+  const [, mimeType, base64Data] = match
+
+  return {
+    content: [
+      { type: 'image' as const, data: base64Data, mimeType },
+      {
+        type: 'text' as const,
+        text: JSON.stringify({ ...(result as Record<string, unknown>), imageData: '<returned as image>' }, null, 2)
+      }
+    ]
+  }
 }
 
 /**
