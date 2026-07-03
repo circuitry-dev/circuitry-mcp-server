@@ -127,7 +127,10 @@ export class EServerClient {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({
-          source: 'claude-code-cli',
+          // 'circuitry-chat' (set by the app when it spawns the CLI for a
+          // chat) auto-approves server-side — the user's own chat message is
+          // the consent. Terminal-launched CLIs keep the approval dialog.
+          source: process.env.CIRCUITRY_MCP_SOURCE || 'claude-code-cli',
           timestamp: Date.now()
         })
       })
