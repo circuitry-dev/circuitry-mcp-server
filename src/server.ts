@@ -156,6 +156,12 @@ export async function startServer(): Promise<void> {
       if (name === 'circuitry.status') {
         const status = await client.getStatus()
         const updateRequired = getUpdateRequired()
+        // Report the HOST's view, not just this process's flag — a session
+        // approved before this server started is approved, and reporting
+        // `false` sends the model chasing a permission problem that isn't one.
+        if (!connectionApproved && (await client.getConnectionStatus()).approved) {
+          connectionApproved = true
+        }
         return successResponse({
           ...status,
           approved: connectionApproved,
@@ -202,18 +208,38 @@ export async function startServer(): Promise<void> {
         })
       }
 
-      // All other tools require approved connection
+      // All other tools require an approved connection — but "not connected
+      // yet" is NOT an error the model should have to recover from. Telling it
+      // to "call circuitry.connect first" costs a full round-trip to do a thing
+      // that needs no judgement, and for a chat-spawned server the host
+      // auto-approves anyway, so the user never even sees a prompt: it is pure
+      // latency for a handshake we can just perform. CONNECT, THEN CONTINUE.
       if (!connectionApproved) {
-        // Try to auto-approve if already approved in a previous session
+        // Already approved in a previous session? (cheap, no user-facing effect)
         const status = await client.getConnectionStatus()
+        if (status.authFailed) {
+          return errorResponse(
+            `Circuitry rejected the access key (401).\n\nThis is an AUTHENTICATION problem, not a permission one — do not retry circuitry.connect, it will fail the same way.\n\nAsk the user to re-run:\n  npx @circuitry/mcp-server setup`
+          )
+        }
         if (status.approved) {
           connectionApproved = true
           // Reconnect path — refresh the catalog too so it tracks the app.
           await refreshCatalog()
         } else {
-          return errorResponse(
-            'Connection not approved.\n\nCall circuitry.connect first to request permission from the user.'
-          )
+          // Perform the handshake on the model's behalf. Terminal-launched CLIs
+          // still get a real consent dialog here (the host broadcasts
+          // mcp_connection_request); only an actual DENIAL is an error.
+          log(`Auto-connecting for "${name}" (no approved session yet)`)
+          const result = await client.requestConnection()
+          if (result.approved) {
+            connectionApproved = true
+            await refreshCatalog()
+          } else {
+            return errorResponse(
+              `Connection to Circuitry was not approved.\n\n${result.message || 'The user declined the connection request.'}\n\nAsk the user to approve the Circuitry connection, then retry.`
+            )
+          }
         }
       }
 

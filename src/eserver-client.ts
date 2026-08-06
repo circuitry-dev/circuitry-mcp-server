@@ -215,7 +215,7 @@ export class EServerClient {
   /**
    * Check if connection is already approved
    */
-  async getConnectionStatus(): Promise<{ approved: boolean }> {
+  async getConnectionStatus(): Promise<{ approved: boolean; authFailed?: boolean }> {
     try {
       const response = await fetch(`${this.baseUrl}/mcp/status`, {
         headers: this.getHeaders()
@@ -224,6 +224,15 @@ export class EServerClient {
       if (response.ok) {
         const data = await response.json()
         return { approved: data.approved || false }
+      }
+      // AN AUTH FAILURE IS NOT A PERMISSION PROBLEM. Collapsing 401/403 into
+      // `approved:false` is what makes a stale access key surface to the model
+      // as "Connection not approved. Call circuitry.connect first" — so it
+      // retries connect, which 401s too, burning a round-trip each time. Say
+      // which one it is and let the caller report something actionable.
+      if (response.status === 401 || response.status === 403) {
+        log(`Auth failed on /mcp/status (${response.status}) — stale or wrong access key`)
+        return { approved: false, authFailed: true }
       }
     } catch (error) {
       log('Connection status check failed:', error)
