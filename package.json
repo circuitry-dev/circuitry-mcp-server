@@ -1,11 +1,11 @@
 {
-  "name": "@circuitry/mcp-server",
+  "name": "@circuitry-ide/mcp-server",
   "version": "2.2.0",
   "description": "MCP server for Claude Code CLI to communicate with Circuitry",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "circuitry-mcp": "./bin/circuitry-mcp"
+    "circuitry-mcp": "bin/circuitry-mcp"
   },
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs');fs.existsSync('src/tools-snapshot.json')?fs.copyFileSync('src/tools-snapshot.json','dist/tools-snapshot.json'):console.warn('[build] WARN: src/tools-snapshot.json missing — regenerate with the app repo: npm run mcp:generate')\"",

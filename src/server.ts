@@ -29,7 +29,7 @@ export async function startServer(): Promise<void> {
 
   // Check configuration
   if (!isConfigured()) {
-    log('Server not configured. Run "npx @circuitry/mcp-server setup" first.')
+    log('Server not configured. Run "npx @circuitry-ide/mcp-server setup" first.')
   }
 
   // Create server
@@ -139,7 +139,7 @@ export async function startServer(): Promise<void> {
     // Check if configured
     if (!isConfigured()) {
       return errorResponse(
-        'Circuitry MCP Server is not configured.\n\nRun this command to set up:\n  npx @circuitry/mcp-server setup'
+        'Circuitry MCP Server is not configured.\n\nRun this command to set up:\n  npx @circuitry-ide/mcp-server setup'
       )
     }
 
@@ -232,7 +232,7 @@ export async function startServer(): Promise<void> {
         const status = await client.getConnectionStatus()
         if (status.authFailed) {
           return errorResponse(
-            `Circuitry rejected the access key (401).\n\nThis is an AUTHENTICATION problem, not a permission one — do not retry circuitry.connect, it will fail the same way.\n\nAsk the user to re-run:\n  npx @circuitry/mcp-server setup`
+            `Circuitry rejected the access key (401).\n\nThis is an AUTHENTICATION problem, not a permission one — do not retry circuitry.connect, it will fail the same way.\n\nAsk the user to re-run:\n  npx @circuitry-ide/mcp-server setup`
           )
         }
         if (status.approved) {

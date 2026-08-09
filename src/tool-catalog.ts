@@ -32,17 +32,17 @@ const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 export function updateInstructionForThisInstall(dir: string = moduleDir): string {
   const p = dir.split(path.sep).join('/')
   if (p.includes('/_npx/') || p.includes('/.npm/_npx/')) {
-    return 'This copy runs from the npx cache — run `npx -y @circuitry/mcp-server@latest` once to refresh it (npx caches aggressively), or pin @latest in your MCP config command.'
+    return 'This copy runs from the npx cache — run `npx -y @circuitry-ide/mcp-server@latest` once to refresh it (npx caches aggressively), or pin @latest in your MCP config command.'
   }
   if (p.includes('/lib/node_modules/') || p.includes('/npm/node_modules/')) {
-    return 'This copy is installed globally — update with `npm i -g @circuitry/mcp-server@latest`.'
+    return 'This copy is installed globally — update with `npm i -g @circuitry-ide/mcp-server@latest`.'
   }
   const nm = p.lastIndexOf('/node_modules/')
   if (nm !== -1) {
     const projectDir = p.slice(0, nm)
-    return `This copy is installed in a project (${projectDir}) — update it there with \`npm i @circuitry/mcp-server@latest\`.`
+    return `This copy is installed in a project (${projectDir}) — update it there with \`npm i @circuitry-ide/mcp-server@latest\`.`
   }
-  return 'This copy runs from a source checkout — `git pull` and `npm run build` it, or switch your MCP config to `npx -y @circuitry/mcp-server@latest`.'
+  return 'This copy runs from a source checkout — `git pull` and `npm run build` it, or switch your MCP config to `npx -y @circuitry-ide/mcp-server@latest`.'
 }
 
 // At runtime this module lives in dist/. The build copies tools-snapshot.json

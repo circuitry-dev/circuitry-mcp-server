@@ -2,7 +2,7 @@
 /**
  * Circuitry MCP Server CLI
  *
- * Entry point for the @circuitry/mcp-server package.
+ * Entry point for the @circuitry-ide/mcp-server package.
  * Routes to setup wizard or starts the MCP server.
  */
 
@@ -33,7 +33,7 @@ Claude Code Configuration:
     "mcpServers": {
       "circuitry": {
         "command": "npx",
-        "args": ["-y", "@circuitry/mcp-server"]
+        "args": ["-y", "@circuitry-ide/mcp-server"]
       }
     }
   }

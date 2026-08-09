@@ -1,4 +1,4 @@
-# @circuitry/mcp-server
+# @circuitry-ide/mcp-server
 
 MCP (Model Context Protocol) server that gives AI coding agents access to [Circuitry](https://www.circuitry.dev) - a visual workflow and diagramming platform.
 
@@ -28,7 +28,7 @@ MCP (Model Context Protocol) server that gives AI coding agents access to [Circu
 ### 2. Run MCP Setup (Required)
 
 ```bash
-npx @circuitry/mcp-server setup
+npx @circuitry-ide/mcp-server setup
 ```
 
 This will prompt you to enter:
@@ -42,7 +42,7 @@ This stores your credentials in `~/.circuitry/mcp-config.json`.
 #### Claude Code
 
 ```bash
-claude mcp add circuitry npx @circuitry/mcp-server
+claude mcp add circuitry npx @circuitry-ide/mcp-server
 ```
 
 Or manually add to `~/.claude/config.json`:
@@ -52,7 +52,7 @@ Or manually add to `~/.claude/config.json`:
   "mcpServers": {
     "circuitry": {
       "command": "npx",
-      "args": ["-y", "@circuitry/mcp-server"]
+      "args": ["-y", "@circuitry-ide/mcp-server"]
     }
   }
 }
@@ -67,7 +67,7 @@ Settings → MCP → Add New MCP Server:
   "mcpServers": {
     "circuitry": {
       "command": "npx",
-      "args": ["-y", "@circuitry/mcp-server"]
+      "args": ["-y", "@circuitry-ide/mcp-server"]
     }
   }
 }
@@ -76,13 +76,13 @@ Settings → MCP → Add New MCP Server:
 #### VS Code / Copilot
 
 ```bash
-code --add-mcp '{"name":"circuitry","command":"npx","args":["-y","@circuitry/mcp-server"]}'
+code --add-mcp '{"name":"circuitry","command":"npx","args":["-y","@circuitry-ide/mcp-server"]}'
 ```
 
 #### Gemini CLI
 
 ```bash
-gemini mcp add circuitry npx @circuitry/mcp-server
+gemini mcp add circuitry npx @circuitry-ide/mcp-server
 ```
 
 #### Cline / Windsurf
@@ -200,7 +200,7 @@ server keeps working with whatever it can parse and surfaces an update-required
 notice on `circuitry.connect` / `circuitry.status`:
 
 ```
-npm i -g @circuitry/mcp-server@latest   # or just use `npx @circuitry/mcp-server`
+npm i -g @circuitry-ide/mcp-server@latest   # or just use `npx @circuitry-ide/mcp-server`
 ```
 
 The bundled snapshot is regenerated at publish time from the app's source of
@@ -241,10 +241,10 @@ Location: `~/.circuitry/mcp-config.json`
 
 ```bash
 # Run setup wizard
-npx @circuitry/mcp-server setup
+npx @circuitry-ide/mcp-server setup
 
 # Check current configuration
-npx @circuitry/mcp-server status
+npx @circuitry-ide/mcp-server status
 ```
 
 ## Troubleshooting
@@ -253,12 +253,12 @@ npx @circuitry/mcp-server status
 
 1. **Check EServer is running**: Look for the Circuitry icon in your system tray
 2. **Start Circuitry Server**: Download from [circuitry.dev/download](https://www.circuitry.dev/download)
-3. **Verify URL**: Run `npx @circuitry/mcp-server status`
+3. **Verify URL**: Run `npx @circuitry-ide/mcp-server status`
 
 ### "Invalid access key"
 
 1. **Create new key**: Circuitry Server → Preferences → Generate New Access Key
-2. **Re-run setup**: `npx @circuitry/mcp-server setup`
+2. **Re-run setup**: `npx @circuitry-ide/mcp-server setup`
 
 ### "No Circuitry browser client connected"
 

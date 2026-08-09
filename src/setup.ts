@@ -193,7 +193,7 @@ export async function runSetup(): Promise<void> {
   println(`    "mcpServers": {`)
   println(`      "circuitry": {`)
   println(`        "command": "npx",`)
-  println(`        "args": ["-y", "@circuitry/mcp-server"]`)
+  println(`        "args": ["-y", "@circuitry-ide/mcp-server"]`)
   println(`      }`)
   println(`    }`)
   println(`  }${COLORS.reset}`)

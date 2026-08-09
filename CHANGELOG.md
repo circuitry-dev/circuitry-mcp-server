@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@circuitry/mcp-server` are documented here.
+All notable changes to `@circuitry-ide/mcp-server` are documented here.
 
 ## 2.1.0
 
