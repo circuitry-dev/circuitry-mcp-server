@@ -143,11 +143,20 @@ export async function startServer(): Promise<void> {
       )
     }
 
-    // Check connection to EServer
+    // Check connection to EServer. The error must be PRESCRIPTIVE and final:
+    // agentic CLIs with shell access respond to vague connection errors by
+    // running port/process forensics (lsof, curl probes) in front of the
+    // user — terrible UX (owner report, 2026-08-09). Tell the model exactly
+    // what to say and explicitly that no diagnostics are needed. ping()
+    // already fails over between the desktop app (45030) and the standalone
+    // server (3030), so a false here genuinely means nothing is running.
     const connected = await client.ping()
     if (!connected) {
       return errorResponse(
-        `Cannot connect to EServer at ${getEServerUrl()}\n\nMake sure:\n1. Circuitry Electron app is running\n2. EServer is enabled (check system tray)`
+        'Circuitry is not running on this computer.\n\n' +
+        'Tell the user: "Open the Circuitry app (or start Circuitry Server), then ask me again."\n\n' +
+        'Do NOT run shell diagnostics (lsof, curl, ps) or investigate ports/processes — ' +
+        'this check already probed every known endpoint. Once Circuitry is open, simply retry the tool.'
       )
     }
 
@@ -192,7 +201,11 @@ export async function startServer(): Promise<void> {
           message: appendNotice(
             result.approved
               ? 'Connection approved. Chat panel opened in agent+mcp mode.'
-              : 'Connection denied by user.',
+              // Prescriptive on denial, so the model relays a human sentence
+              // instead of investigating (owner UX directive 2026-08-09).
+              // Local desktop connections auto-approve, so a denial here means
+              // a person declined a prompt (remote/standalone-server setups).
+              : 'Circuitry declined the connection. Tell the user: "Circuitry asked for permission and it was denied — approve the prompt in Circuitry (or check Settings → MCP), then ask me again." Do not run shell diagnostics; just retry after they approve.',
             updateRequired
           )
         })

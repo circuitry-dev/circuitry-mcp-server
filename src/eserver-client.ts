@@ -110,6 +110,11 @@ export class EServerClient {
     return false
   }
 
+  /** Current relay endpoint (post-failover) — for status/messages only. */
+  getBaseUrl(): string {
+    return this.baseUrl
+  }
+
   /**
    * Get EServer status
    */
