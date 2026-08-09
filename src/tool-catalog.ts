@@ -21,6 +21,30 @@ import { connectionTools } from './tools.js'
 const log = (...args: unknown[]) => console.error('[circuitry-mcp:catalog]', ...args)
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * The update command must target THE COPY THAT IS RUNNING (owner directive
+ * 2026-08-09): this package gets installed several ways — npx cache, global,
+ * a project's node_modules, or a source checkout — and telling everyone
+ * `npm i -g` updates a copy their MCP config may not even launch. Derive the
+ * install kind from our own path and prescribe the matching command.
+ */
+export function updateInstructionForThisInstall(dir: string = moduleDir): string {
+  const p = dir.split(path.sep).join('/')
+  if (p.includes('/_npx/') || p.includes('/.npm/_npx/')) {
+    return 'This copy runs from the npx cache — run `npx -y @circuitry/mcp-server@latest` once to refresh it (npx caches aggressively), or pin @latest in your MCP config command.'
+  }
+  if (p.includes('/lib/node_modules/') || p.includes('/npm/node_modules/')) {
+    return 'This copy is installed globally — update with `npm i -g @circuitry/mcp-server@latest`.'
+  }
+  const nm = p.lastIndexOf('/node_modules/')
+  if (nm !== -1) {
+    const projectDir = p.slice(0, nm)
+    return `This copy is installed in a project (${projectDir}) — update it there with \`npm i @circuitry/mcp-server@latest\`.`
+  }
+  return 'This copy runs from a source checkout — `git pull` and `npm run build` it, or switch your MCP config to `npx -y @circuitry/mcp-server@latest`.'
+}
+
 // At runtime this module lives in dist/. The build copies tools-snapshot.json
 // next to it, and package.json is one level up.
 const SNAPSHOT_PATH = path.join(moduleDir, 'tools-snapshot.json')
@@ -184,7 +208,7 @@ export async function refreshFromApp(
     const min = payload.minServerVersion || `format v${payload.formatVersion}`
     updateRequired =
       `Circuitry app expects MCP server >= ${min} (you have ${ownVersion}). ` +
-      `Update: npm i -g @circuitry/mcp-server@latest (or use npx @circuitry/mcp-server).`
+      updateInstructionForThisInstall()
     log(updateRequired)
   }
   lastUpdateRequired = updateRequired
