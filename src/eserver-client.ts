@@ -75,17 +75,39 @@ export class EServerClient {
   }
 
   /**
-   * Check if EServer is running and accessible
+   * Check if EServer is running and accessible.
+   *
+   * ENDPOINT DISCOVERY (2026-08-09): two local endpoints can serve the relay —
+   * the Circuitry DESKTOP APP's own bridge on its dedicated port (45030), and
+   * the standalone Circuitry Server on the canonical eserver port (3030; also
+   * what iPad/web pairing uses). Both can run at once. When the current
+   * endpoint doesn't answer, fail over to whichever is alive — preferring the
+   * desktop app, the richest target (the user's open editor).
    */
-  async ping(): Promise<boolean> {
+  private static readonly LOCAL_ENDPOINTS = [
+    'http://localhost:45030', // Circuitry desktop app bridge
+    'http://localhost:3030',  // standalone Circuitry Server
+  ]
+
+  private async pingUrl(url: string): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/ping`, {
-        headers: this.getHeaders()
-      })
+      const response = await fetch(`${url}/ping`, { headers: this.getHeaders() })
       return response.ok
     } catch {
       return false
     }
+  }
+
+  async ping(): Promise<boolean> {
+    if (await this.pingUrl(this.baseUrl)) return true
+    for (const candidate of EServerClient.LOCAL_ENDPOINTS) {
+      if (candidate !== this.baseUrl && await this.pingUrl(candidate)) {
+        log(`EServer endpoint failed over to ${candidate}`)
+        this.baseUrl = candidate
+        return true
+      }
+    }
+    return false
   }
 
   /**
